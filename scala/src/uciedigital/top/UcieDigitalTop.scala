@@ -1,9 +1,9 @@
 /*
   Description:
-    UcieTop is the integration wrapper that wires together the protocol layer,
+    UcieDigitalTop is the integration wrapper that wires together the protocol layer,
     die-to-die adapter, and logical PHY into a single top-level module.
 
-    The main interface parameters live in UcieTopParams. In general:
+    The main interface parameters live in UcieDigitalTopParams. In general:
     - FDI/RDI/sideband width parameters define the top-level interface shape.
     - LogicalPhyTopParams contains the primary tuning knobs for bring-up and
       training experiments, such as retry width and sideband timeout depth.
@@ -17,15 +17,15 @@ import edu.berkeley.cs.uciedigital.interfaces._
 import edu.berkeley.cs.uciedigital.logphy._
 import edu.berkeley.cs.uciedigital.protocol._
 
-class UcieTopProtocolIO(protocolParams: ProtocolTopParams) extends Bundle {
+class UcieDigitalTopProtocolIO(protocolParams: ProtocolTopParams) extends Bundle {
   val ctrl = new ProtocolLayerCtrlIO()
   val status = new ProtocolLayerStatusIO()
   val mainbandTx = Flipped(Decoupled(new ProtocolRawBeat(protocolParams.fdi.nBytes)))
   val mainbandRx = Decoupled(new ProtocolRawBeat(protocolParams.fdi.nBytes))
 }
 
-class UcieTopIO(params: UcieTopParams) extends Bundle {
-  val protocol = new UcieTopProtocolIO(params.protocol)
+class UcieDigitalTopIO(params: UcieDigitalTopParams) extends Bundle {
+  val protocol = new UcieDigitalTopProtocolIO(params.protocol)
   val logPhy = new Bundle {
     val ctrl = new LogicalPhyCtrlIO(params.logPhy.retryW)
     val status = new LogicalPhyStatusIO()
@@ -33,10 +33,10 @@ class UcieTopIO(params: UcieTopParams) extends Bundle {
   val analog = new LogicalPhyAnalogIO(params.logPhy.afe, params.logPhy.sideband)
 }
 
-class UcieTop(params: UcieTopParams = UcieTopParams.default()) extends Module {
+class UcieDigitalTop(params: UcieDigitalTopParams = UcieDigitalTopParams.default()) extends Module {
   private val validatedParams = params.validate()
 
-  val io = IO(new UcieTopIO(validatedParams))
+  val io = IO(new UcieDigitalTopIO(validatedParams))
 
   val protocolLayer = Module(new ProtocolLayer(
     params = validatedParams.protocol.layer,

@@ -2,7 +2,7 @@ package edu.berkeley.cs.uciedigital.top
 
 import circt.stage.ChiselStage
 
-object UcieTopElab {
+object UcieDigitalTopElab {
   private val commonFirtoolOpts = Array(
     "--disable-all-randomization"
   )
@@ -37,17 +37,17 @@ object UcieTopElab {
       }
 
     ChiselStage.emitSystemVerilogFile(
-      new UcieTop(),
+      new UcieDigitalTop(),
       args = Array("-td", targetDir),
       firtoolOpts = firtoolOpts,
     )
   }
 }
 
-object MainUcieTopDebug extends App {
-  UcieTopElab.emit("./generatedVerilog/top-debug", debug = true)
+object MainUcieDigitalTopDebug extends App {
+  UcieDigitalTopElab.emit("./generatedVerilog/top-debug", debug = true)
 }
 
 object MainUcieTop extends App {
-  UcieTopElab.emit("./generatedVerilog/top", debug = false)
+  UcieDigitalTopElab.emit("./generatedVerilog/top", debug = false)
 }

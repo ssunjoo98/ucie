@@ -35,12 +35,12 @@ case class LogicalPhyTopParams(
   queueDepths: SidebandPriorityQueueDepths = SidebandPriorityQueueDepths(),
 )
 
-case class UcieTopParams(
+case class UcieDigitalTopParams(
   protocol: ProtocolTopParams,
   adapter: AdapterTopParams,
   logPhy: LogicalPhyTopParams,
 ) {
-  def validate(): UcieTopParams = {
+  def validate(): UcieDigitalTopParams = {
     require(
       protocol.fdi == adapter.fdi,
       s"Protocol FDI params ${protocol.fdi} must match adapter FDI params ${adapter.fdi}"
@@ -57,12 +57,12 @@ case class UcieTopParams(
   }
 }
 
-object UcieTopParams {
-  def default(): UcieTopParams = {
+object UcieDigitalTopParams {
+  def default(): UcieDigitalTopParams = {
     val explicitFdi = FdiParams(nBytes = 64, ncWidth = 32)
     val explicitRdi = RdiParams(nBytes = 64, ncWidth = 32)
 
-    UcieTopParams(
+    UcieDigitalTopParams(
       protocol = ProtocolTopParams(fdi = explicitFdi),
       adapter = AdapterTopParams(fdi = explicitFdi, rdi = explicitRdi),
       logPhy = LogicalPhyTopParams(rdi = explicitRdi)
@@ -79,8 +79,8 @@ object UcieTopParams {
     retryW: Int = 10,
     desTimeoutCycles: Int = 512,
     queueDepths: SidebandPriorityQueueDepths = SidebandPriorityQueueDepths(),
-  ): UcieTopParams = {
-    UcieTopParams(
+  ): UcieDigitalTopParams = {
+    UcieDigitalTopParams(
       protocol = ProtocolTopParams(
         fdi = fdi,
         layer = protocolLayer
