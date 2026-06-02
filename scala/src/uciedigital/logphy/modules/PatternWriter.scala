@@ -275,7 +275,7 @@ class PatternWriter(afeParams: AfeParams) extends Module {
         label = Some("PatternWriterCompleteIsOneCyclePulse")
       )
 
-      // Used because Chisel LTL Assertion doesn't have $stable for the output
+      // Used because Chisel LTL Assertion doesn't have $stable for UInt
       val heldLastCycle = RegNext(io.mbTxLaneIo.valid && !io.mbTxLaneIo.ready, false.B)
       val previousOutputBits = RegNext(io.mbTxLaneIo.bits.asUInt)
       val previousCycleCount = RegNext(cycleCount)
