@@ -2,6 +2,7 @@ package edu.berkeley.cs.uciedigital.logphy
 
 import edu.berkeley.cs.uciedigital.interfaces._
 import edu.berkeley.cs.uciedigital.sideband._
+import edu.berkeley.cs.uciedigital.utils._
 import circt.stage.ChiselStage
 
 object MainSidebandMessageExchanger extends App {
@@ -32,6 +33,17 @@ object MainUCIeLFSR extends App {
   )
 }
 
+object MainParallelGaloisLFSR extends App {
+  ChiselStage.emitSystemVerilogFile(
+    new ParallelGaloisLFSR(0x1DBFBC, 23, 32, 0x210125),
+    args = Array("-td", "./generatedVerilog/logphy/"),
+    firtoolOpts = Array(
+      "-O=debug",
+      "--lowering-options=disallowLocalVariables",
+    ),
+  )
+}
+
 object MainMainbandLaneController extends App {
   ChiselStage.emitSystemVerilogFile(
     new MainbandLaneController(new AfeParams(), RdiParams(64, 32)),
@@ -52,10 +64,8 @@ object MainPatternWriter extends App {
     args = Array("-td", "./generatedVerilog/logphy/"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
       "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",      
     ),
   )
 }
