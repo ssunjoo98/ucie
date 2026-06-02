@@ -17,18 +17,6 @@
 package edu.berkeley.cs.uciedigital.utils
 
 import chisel3._
-import circt.stage.ChiselStage
-// import chisel3.ltl._
-// import chisel3.layer.{Convention, Layer, block}
-
-
-// // All layers are declared here.  The Assert and Debug layers are nested under
-// // the Verification layer.
-// object Verification extends Layer(Convention.Bind) {
-//   object Assert extends Layer(Convention.Bind)
-//   object Debug extends Layer(Convention.Bind)
-//   object Cover extends Layer(Convention.Bind)
-// }
 
 class ParallelGaloisLFSR(seed: Int, lfsrWidth: Int, dataWidth: Int, polynomial: Int) 
   extends Module {  
@@ -39,22 +27,9 @@ class ParallelGaloisLFSR(seed: Int, lfsrWidth: Int, dataWidth: Int, polynomial: 
     val state = Output(UInt(lfsrWidth.W))    
   })
 
-  assert(seed > 0, "Seed needs to be positive")
-  assert(dataWidth > 0, "Dath width needs to be positive")
-
-  // if(!chiselSim) {
-  //   block(Verification) {
-  //     block(Verification.Assert) {
-  //       val impl = Sequence.BoolSequence(io.resetLfsr)
-  //       AssertProperty(impl |-> Property.eventually(Sequence.BoolSequence(io.increment === true.B)))
-  //     }    
-  //     block(Verification.Cover) {
-  //       val impl = Sequence.BoolSequence(io.resetLfsr)
-  //       CoverProperty(impl |-> Property.eventually(Sequence.BoolSequence(io.increment === true.B)))
-  //     }
-  //   }
-  // }
-
+  require(seed > 0, "Seed needs to be positive")
+  require(dataWidth > 0, "Dath width needs to be positive")
+  
   // rows: lfsrWidth, cols: lfsrWidth
   var stateUpdateMatrix: Array[Array[Int]] = Array.ofDim[Int](lfsrWidth, lfsrWidth) 
   
@@ -122,7 +97,6 @@ class ParallelGaloisLFSR(seed: Int, lfsrWidth: Int, dataWidth: Int, polynomial: 
 }
 
 class SerialGaloisLFSR(initSeed: Int, poly: Int, width: Int) {
-
   private val polynomial: Int = poly  
   private var state: Int = initSeed
   private var seed: Int = initSeed
@@ -164,18 +138,4 @@ class SerialGaloisLFSR(initSeed: Int, poly: Int, width: Int) {
     }
     (getStateBitStr(), bitStr.reverse)
   }
-}
-
-object MainParallelGaloisLFSR extends App {
-  ChiselStage.emitSystemVerilogFile(
-    new ParallelGaloisLFSR(0x1DBFBC, 23, 32, 0x210125),
-    args = Array("-td", "./generatedVerilog/logphy/"),
-    firtoolOpts = Array(
-      "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables",
-    ),
-  )
 }
