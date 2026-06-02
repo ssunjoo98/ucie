@@ -2,13 +2,7 @@ package edu.berkeley.cs.uciedigital.utils
 
 import chisel3._
 import chisel3.util._
-
-// ChiselSim for Chisel 6
-// import chisel3.simulator.EphemeralSimulator._
-
-// ChiselSim, for Chisel 7.0+
 import chisel3.simulator.scalatest.ChiselSim
-// import chisel3.simulator.stimulus.{RunUntilFinished, RunUntilSuccess, ResetProcedure}
 
 import org.scalatest.funspec.AnyFunSpec
 
