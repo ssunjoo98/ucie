@@ -685,7 +685,6 @@ class LinkTrainingSM(sbParams: SidebandParams, afeParams: AfeParams, retryW: Int
   // Default assignments
   io.patternWriterIo.req.valid := false.B
   io.patternWriterIo.req.bits := DontCare
-  io.patternWriterIo.functionalLanes := localTxFunctionalLanes
 
   patternWriterClients.foreach { case (isUsing, clientIo) =>
     clientIo.resp := io.patternWriterIo.resp
@@ -1324,5 +1323,4 @@ class LinkTrainingSM(sbParams: SidebandParams, afeParams: AfeParams, retryW: Int
     } 
   }
 }
-
 

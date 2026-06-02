@@ -394,9 +394,12 @@ class LogicalPhy(
   fwClkNBits := VecInit(Seq.tabulate(afeParams.mbSerializerRatio)(i => fwClkNPattern(i % 8))).asUInt
 
   val rxClkCalOverride = ltsm.io.rxClkCalSendFwClkPattern && ltsm.io.rxClkCalSendTrkPattern
-  val trainingPatternTxActive =
+  val patternWriterSelectedForTx =
     ((ltsm.io.ltState === LTState.sMBINIT) || (ltsm.io.ltState === LTState.sMBTRAIN)) &&
-    patternWriter.io.mbTxLaneIo.valid
+    !rxClkCalOverride &&
+    !isActive
+  patternWriter.io.mbTxLaneIo.ready := patternWriterSelectedForTx && io.analog.mainband.tx.ready
+
   val rxClkCalTxBits = Wire(new MainbandLanes(afeParams.mbLanes, afeParams.mbSerializerRatio))
   rxClkCalTxBits.data.foreach(_ := 0.U)
   rxClkCalTxBits.valid := 0.U
@@ -425,7 +428,7 @@ class LogicalPhy(
   }.elsewhen(rxClkCalOverride) {
     selectedTxBits := rxClkCalTxBits
     io.analog.mainband.tx.valid := true.B
-  }.elsewhen((ltsm.io.ltState === LTState.sMBINIT) || (ltsm.io.ltState === LTState.sMBTRAIN)) {
+  }.elsewhen(patternWriterSelectedForTx) {
     selectedTxBits := patternWriter.io.mbTxLaneIo.bits
     io.analog.mainband.tx.valid := patternWriter.io.mbTxLaneIo.valid
   }
@@ -441,10 +444,6 @@ class LogicalPhy(
       when(rxClkCalOverride) {
         assert(io.analog.mainband.tx.ready,
           "FATAL: LogicalPhy training TX path assumes the analog PHY is ready")
-      }
-      when(trainingPatternTxActive) {
-        assert(io.analog.mainband.tx.ready,
-          "FATAL: PatternWriter training path assumes the analog PHY is ready")
       }
     }
   }

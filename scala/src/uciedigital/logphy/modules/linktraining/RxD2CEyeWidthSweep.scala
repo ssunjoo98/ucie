@@ -274,7 +274,6 @@ class RxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
         "PatternType should only be VALTRAIN or LFSR")
   io.patternWriterIo.req.bits.patternType := patternTypeReg
   io.patternWriterIo.req.valid := false.B
-  io.patternWriterIo.functionalLanes := "b011".U
   io.done := false.B
 
   val rxInitEyeWidthSweepRemoteResults = WireInit(VecInit(Seq.fill(afeParams.mbLanes)(0.U(1.W))))

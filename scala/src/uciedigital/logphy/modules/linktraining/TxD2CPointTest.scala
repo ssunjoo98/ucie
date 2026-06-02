@@ -87,7 +87,6 @@ class TxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
         "PatternType should only be VALTRAIN or LFSR")
   io.patternWriterIo.req.bits.patternType := patternTypeReg
   io.patternWriterIo.req.valid := false.B
-  io.patternWriterIo.functionalLanes := "b011".U
   io.done := false.B
 
   val startReqData = Wire(UInt(64.W))
@@ -311,4 +310,3 @@ class TxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
     }
   }
 }
-

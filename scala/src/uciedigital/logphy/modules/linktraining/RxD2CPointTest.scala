@@ -228,7 +228,6 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
         "PatternType should only be VALTRAIN or LFSR")
   io.patternWriterIo.req.bits.patternType := patternTypeReg
   io.patternWriterIo.req.valid := false.B
-  io.patternWriterIo.functionalLanes := "b011".U
   io.done := false.B
 
 
@@ -302,4 +301,3 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
     }
   }
 }
-

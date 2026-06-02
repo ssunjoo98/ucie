@@ -100,7 +100,6 @@ class TxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
   io.done := false.B
   io.patternWriterIo.req.valid := false.B
   io.patternWriterIo.req.bits.patternType := patternTypeReg
-  io.patternWriterIo.functionalLanes := "b011".U
   io.usingPatternWriter := inProgress
 
   // FSM helpers
@@ -354,4 +353,3 @@ class TxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
     }
   }
 }
-

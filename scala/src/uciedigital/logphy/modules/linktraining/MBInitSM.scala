@@ -298,7 +298,6 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
   // patternWriterIo defaults
   io.patternWriterIo.req.valid := false.B
   io.patternWriterIo.req.bits.patternType := PatternSelect.VALTRAIN
-  io.patternWriterIo.functionalLanes := "b011".U
 
   // txPtTestReqInterfaceIo Defaults (defaults are used in MBINIT.REPAIRMB state)
   io.txPtTestReqInterfaceIo.start := false.B
@@ -1242,4 +1241,3 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
     }
   }
 }
-
