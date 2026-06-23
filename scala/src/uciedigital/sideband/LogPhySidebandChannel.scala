@@ -10,6 +10,7 @@ package edu.berkeley.cs.uciedigital.sideband
 import chisel3._
 import circt.stage.ChiselStage
 import chisel3.util._
+import edu.berkeley.cs.uciedigital.utils.SkidBuffer
 
 class LogPhySidebandChannel(
   sbMsgWidth: Int, sbLinkWidth: Int, rdiNcWidth: Int, numCredits: Int, desTimeoutCycles: Int,
@@ -59,6 +60,8 @@ class LogPhySidebandChannel(
   val rdiIntfNode = Module(new SidebandInterfaceNode(sbMsgWidth, rdiNcWidth, numCredits, queueDepths))
   val switch = Module(new SidebandSwitch(layerId, upperIds, lowerIds, sbMsgWidth))
   val linkNode = Module(new SidebandLinkNode(sbMsgWidth, sbLinkWidth, numCredits, desTimeoutCycles, queueDepths))
+  val layerInBuffer = Module(new SkidBuffer(sbMsgWidth))
+  val layerOutBuffer = Module(new SkidBuffer(sbMsgWidth))
 
   // IOs for module
   io.rdi.rxCreditReturn := rdiIntfNode.io.rxCreditReturn
@@ -83,8 +86,10 @@ class LogPhySidebandChannel(
   rdiIntfNode.io.txIn <> switch.io.upperLayer.to
 
   // IOs for SidebandSwitch
-  switch.io.currLayer.from <> io.layer.in
-  switch.io.currLayer.to <> io.layer.out
+  layerInBuffer.io.in <> io.layer.in
+  switch.io.currLayer.from <> layerInBuffer.io.out
+  switch.io.currLayer.to <> layerOutBuffer.io.in
+  io.layer.out <> layerOutBuffer.io.out
   switch.io.lowerLayer.from <> linkNode.io.rxOut
   switch.io.upperLayer.from <> rdiIntfNode.io.rxOut
 

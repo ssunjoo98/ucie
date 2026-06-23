@@ -7,6 +7,9 @@
 package edu.berkeley.cs.uciedigital.sideband
 
 import chisel3._
+import chisel3.layer.block
+import chisel3.layers.Verification
+import chisel3.ltl._
 import circt.stage.ChiselStage
 import chisel3.util._
 import edu.berkeley.cs.uciedigital.utils.SkidBuffer
@@ -65,7 +68,8 @@ class SidebandInterfaceNode(sbMsgWidth: Int, ncWidth: Int, numCredits: Int,
   val doDpCalculationPSet = !(SBMsgOpcode.OpsThatDontUseDPField.map(_.asUInt === headerPSet(4,0))
                                                                .reduce(_ || _))
   val payloadPSet = WireDefault(skidBuffer.io.out.bits(127, 64))
-  val calculatedDPPSet = WireDefault(payloadPSet.xorR && doDpCalculationPSet)
+  val payloadForDPPSet = WireDefault(Mux(doDpCalculationPSet, payloadPSet, 0.U))
+  val calculatedDPPSet = WireDefault(payloadForDPPSet.xorR)
 
   val newHeader = WireDefault(Cat(calculatedDPPSet, calculatedCPPset, headerPSet(61, 0)))
   val newBits = WireDefault(Cat(payloadPSet, newHeader))
@@ -77,6 +81,9 @@ class SidebandInterfaceNode(sbMsgWidth: Int, ncWidth: Int, numCredits: Int,
   // Credit return and consumption logic
   val consumeCredit = Wire(Bool())
   consumeCredit := skidBuffer.io.out.valid && skidBuffer.io.out.ready && !isRegAccessComplete
+  val creditEmpty = txCreditCounter === 0.U
+  val blockedForCredit = skidBuffer.io.out.valid && !isRegAccessComplete && creditEmpty
+  val completionBypassCredit = serializer.io.in.fire && isRegAccessComplete && creditEmpty
 
   when(consumeCredit && !io.txCreditReturn) {      
     txCreditCounter := txCreditCounter - 1.U
@@ -90,14 +97,11 @@ class SidebandInterfaceNode(sbMsgWidth: Int, ncWidth: Int, numCredits: Int,
   
   io.rxIn <> deserializer.io.in
 
-  // Parity Check Logic
-  // Passes other messages through without parity check, can add more rules if needed.
+  // Parity check per spec. CP protects every header field except CP and DP
+  // (reserved bits included), even parity, on every message. DP protects the
+  // data fields, even parity, on messages that carry data.
   val parityErrReg = RegInit(false.B)
   val opcode = deserializer.io.out.bits(4, 0)
-  val isAccComplete = SBM.isRegAccessComplete(opcode)
-  val isReqRespMessage = SBM.isReqRespMessage(opcode)
-  val isAccRequest = SBM.isRegAccessRequest(opcode)
-  val doParityCheck = isAccComplete || isReqRespMessage || isAccRequest
 
   val header = WireDefault(deserializer.io.out.bits(63, 0))
   val bitsToProtect = WireDefault(header(61, 0)) // Skip DP(63), CP(62)
@@ -108,15 +112,17 @@ class SidebandInterfaceNode(sbMsgWidth: Int, ncWidth: Int, numCredits: Int,
   val doDpCalculation = !(SBMsgOpcode.OpsThatDontUseDPField.map(_.asUInt === opcode).reduce(_ || _))
   val payload = WireDefault(deserializer.io.out.bits(127, 64))
   val expectedDP = header(63)
-  val calculatedDP = WireDefault(payload.xorR)
+  val payloadForDP = WireDefault(Mux(doDpCalculation, payload, 0.U))
+  val calculatedDP = WireDefault(payloadForDP.xorR)
   val dpError = WireDefault(doDpCalculation && (expectedDP ^ calculatedDP))
+
+  val parityError = cpError || dpError
 
   // Don't enqueue if parity check fails and trigger an error
   val gatedDeserializerValid = Wire(Bool())
-  gatedDeserializerValid := deserializer.io.out.valid && 
-                            ((doParityCheck && !cpError && !dpError) || !doParityCheck) 
+  gatedDeserializerValid := deserializer.io.out.valid && !parityError
 
-  when(deserializer.io.out.valid && (doParityCheck && (cpError || dpError))) {
+  when(deserializer.io.out.valid && parityError) {
     parityErrReg := true.B
   }
 
@@ -129,6 +135,46 @@ class SidebandInterfaceNode(sbMsgWidth: Int, ncWidth: Int, numCredits: Int,
   // The priority queue must not be full when there is a valid message incoming
   io.rxPriorityQueuesFull := gatedDeserializerValid && !priorityQueue.io.enq.ready
   io.sbParityErr := parityErrReg
+
+  // =======================================================================
+  // Assertions
+  // =======================================================================
+  block(Verification) {
+    block(Verification.Assert) {
+      AssertProperty(
+        Sequence.BoolSequence(consumeCredit) |-> Sequence.BoolSequence(txCreditCounter =/= 0.U),
+        label = Some("NodeNeverConsumesCreditWhenEmpty")
+      )
+      AssertProperty(
+        Sequence.BoolSequence(txCreditCounter <= numCredits.U),
+        label = Some("NodeCreditCounterNeverExceedsMax")
+      )
+    }
+    block(Verification.Cover) {
+      val sawCreditEmpty = RegInit(false.B)
+      val sawCreditReturnAfterEmpty = RegInit(false.B)
+
+      when(creditEmpty) {
+        sawCreditEmpty := true.B
+      }
+      when(sawCreditEmpty && io.txCreditReturn) {
+        sawCreditReturnAfterEmpty := true.B
+      }.elsewhen(consumeCredit) {
+        sawCreditReturnAfterEmpty := false.B
+      }
+
+      cover(creditEmpty, "InterfaceNodeCreditCounterEmpty")
+      cover(consumeCredit, "InterfaceNodeCreditConsumed")
+      cover(io.txCreditReturn, "InterfaceNodeTxCreditReturned")
+      cover(blockedForCredit, "InterfaceNodeCreditConsumingPacketBlockedAtZero")
+      cover(completionBypassCredit, "InterfaceNodeCompletionBypassesZeroCredit")
+      cover(deserializer.io.out.valid && cpError, "InterfaceNodeCpParityErrorDrop")
+      cover(deserializer.io.out.valid && dpError, "InterfaceNodeDpParityErrorDrop")
+      cover(io.rxCreditReturn, "InterfaceNodeRxCreditReturned")
+      cover(io.rxPriorityQueuesFull, "InterfaceNodeRxPriorityQueueFull")
+      cover(consumeCredit && sawCreditReturnAfterEmpty, "InterfaceNodeCreditReturnAllowsLaterConsume")
+    }
+  }
 }
 
 object MainSBInterfaceNode extends App {

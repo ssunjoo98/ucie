@@ -10,9 +10,10 @@ package edu.berkeley.cs.uciedigital.sideband
 import chisel3._
 import circt.stage.ChiselStage
 import chisel3.util._
+import edu.berkeley.cs.uciedigital.utils.SkidBuffer
 
 class ProtocolSidebandChannel(
-  sbMsgWidth: Int, sbLinkWidth: Int, fdiNcWidth: Int, numCredits: Int,
+  sbMsgWidth: Int, fdiNcWidth: Int, numCredits: Int,
   queueDepths: SidebandPriorityQueueDepths) extends Module {
   val io = IO(new Bundle {    
     val layer = new Bundle {
@@ -40,6 +41,8 @@ class ProtocolSidebandChannel(
 
   val switch = Module(new SidebandSwitch(layerId, upperIds, lowerIds, sbMsgWidth))
   val fdiIntfNode = Module(new SidebandInterfaceNode(sbMsgWidth, fdiNcWidth, numCredits, queueDepths))  
+  val layerInBuffer = Module(new SkidBuffer(sbMsgWidth))
+  val layerOutBuffer = Module(new SkidBuffer(sbMsgWidth))
 
   // IOs for module
   io.fdi.rxCreditReturn := fdiIntfNode.io.rxCreditReturn
@@ -57,11 +60,14 @@ class ProtocolSidebandChannel(
   fdiIntfNode.io.txIn <> switch.io.lowerLayer.to
 
   // IOs for SidebandSwitch
-  switch.io.currLayer.from <> io.layer.in
-  switch.io.currLayer.to <> io.layer.out
+  layerInBuffer.io.in <> io.layer.in
+  switch.io.currLayer.from <> layerInBuffer.io.out
+  switch.io.currLayer.to <> layerOutBuffer.io.in
+  io.layer.out <> layerOutBuffer.io.out
   switch.io.lowerLayer.from <> fdiIntfNode.io.rxOut
-  switch.io.upperLayer.from <> DontCare
-  switch.io.upperLayer.to <> DontCare
+  switch.io.upperLayer.from.valid := false.B
+  switch.io.upperLayer.from.bits := 0.U
+  switch.io.upperLayer.to.ready := true.B
 
   // TODO: Maybe add buffers for tx and rx packets to/from the layer, might cause issues with
   // timeout cycles (not sure if a concern) but breaks up long combinational path.
@@ -70,7 +76,7 @@ class ProtocolSidebandChannel(
 
 object MainProtocolSidebandChannel extends App {
   ChiselStage.emitSystemVerilogFile(
-    new ProtocolSidebandChannel(sbMsgWidth=128, sbLinkWidth=1, fdiNcWidth=32, numCredits=32, 
+    new ProtocolSidebandChannel(sbMsgWidth=128, fdiNcWidth=32, numCredits=32,
     queueDepths=SidebandPriorityQueueDepths()),
     args = Array("-td", "./generatedVerilog/sideband"),
     firtoolOpts = Array(

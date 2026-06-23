@@ -7,6 +7,9 @@
 package edu.berkeley.cs.uciedigital.sideband
 
 import chisel3._
+import chisel3.layer.block
+import chisel3.layers.Verification
+import chisel3.ltl._
 import circt.stage.ChiselStage
 import chisel3.util._
 import edu.berkeley.cs.uciedigital.utils.SkidBuffer
@@ -67,6 +70,9 @@ class SidebandLinkNode(sbMsgWidth: Int, sbLinkWidth: Int, numCredits: Int, desTi
   io.txIn.ready := skidBuffer.io.in.ready && !io.ctrl.freezeAcceptingPackets
 
   skidBuffer.io.out.ready := serializer.io.in.ready
+  val txOpcode = skidBuffer.io.out.bits(4, 0)
+  val txIsWoData = SBMsgOpcode.OpsWithoutData.map(_.asUInt === txOpcode).reduce(_ || _)
+  val txAccept = serializer.io.in.fire
   
   // Parity Set Logic -- set parity before serializing
   // NOTE: Assumption is that if data bits need to be zeroed out they will be, so DP == 0
@@ -79,7 +85,8 @@ class SidebandLinkNode(sbMsgWidth: Int, sbLinkWidth: Int, numCredits: Int, desTi
   val doDpCalculationPSet = !(SBMsgOpcode.OpsThatDontUseDPField.map(_.asUInt === headerPSet(4,0))
                                                                .reduce(_ || _))
   val payloadPSet = WireDefault(skidBuffer.io.out.bits(127, 64))
-  val calculatedDPPSet = WireDefault(payloadPSet.xorR && doDpCalculationPSet)
+  val payloadForDPPSet = WireDefault(Mux(doDpCalculationPSet, payloadPSet, 0.U))
+  val calculatedDPPSet = WireDefault(payloadForDPPSet.xorR)
 
   val newHeader = WireDefault(Cat(calculatedDPPSet, calculatedCPPset, headerPSet(61, 0)))
   val newBits = WireDefault(Cat(payloadPSet, newHeader))
@@ -102,14 +109,11 @@ class SidebandLinkNode(sbMsgWidth: Int, sbLinkWidth: Int, numCredits: Int, desTi
 
   io.err.desTimedout := deserializer.io.ctrl.desTimedout
 
-  // Parity Check Logic
-  // Passes other messages through without parity check, can add more rules if needed.
+  // Parity check per spec. CP protects every header field except CP and DP
+  // (reserved bits included), even parity, on every message. DP protects the
+  // data fields, even parity, on messages that carry data.
   val parityErrReg = RegInit(false.B)
   val opcode = deserializer.io.out.bits(4, 0)
-  val isAccComplete = SBM.isRegAccessComplete(opcode)
-  val isReqRespMessage = SBM.isReqRespMessage(opcode)
-  val isAccRequest = SBM.isRegAccessRequest(opcode)
-  val doParityCheck = isAccComplete || isReqRespMessage || isAccRequest
 
   val header = WireDefault(deserializer.io.out.bits(63, 0))
   val bitsToProtect = WireDefault(header(61, 0)) // Skip DP(63), CP(62)
@@ -120,15 +124,19 @@ class SidebandLinkNode(sbMsgWidth: Int, sbLinkWidth: Int, numCredits: Int, desTi
   val doDpCalculation = !(SBMsgOpcode.OpsThatDontUseDPField.map(_.asUInt === opcode).reduce(_ || _))
   val payload = WireDefault(deserializer.io.out.bits(127, 64))
   val expectedDP = header(63)
-  val calculatedDP = WireDefault(payload.xorR)
+  val payloadForDP = WireDefault(Mux(doDpCalculation, payload, 0.U))
+  val calculatedDP = WireDefault(payloadForDP.xorR)
   val dpError = WireDefault(doDpCalculation && (expectedDP ^ calculatedDP))
+
+  val parityError = cpError || dpError
+  val rxOpcode = io.rxOut.bits(4, 0)
+  val rxIsWoData = SBMsgOpcode.OpsWithoutData.map(_.asUInt === rxOpcode).reduce(_ || _)
 
   // Don't enqueue if parity check fails and trigger an error
   val gatedDeserializerValid = Wire(Bool())
-  gatedDeserializerValid := deserializer.io.out.valid && 
-                            ((doParityCheck && !cpError && !dpError) || !doParityCheck) 
+  gatedDeserializerValid := deserializer.io.out.valid && !parityError
 
-  when(deserializer.io.out.valid && (doParityCheck && (cpError || dpError))) {
+  when(deserializer.io.out.valid && parityError) {
     parityErrReg := true.B
   }
 
@@ -141,6 +149,39 @@ class SidebandLinkNode(sbMsgWidth: Int, sbLinkWidth: Int, numCredits: Int, desTi
   // The priority queue must not be full when there is a valid message incoming
   io.err.rxPriorityQueuesFull := gatedDeserializerValid && !priorityQueue.io.enq.ready
   io.err.sbParityErr := parityErrReg
+
+  // =======================================================================
+  // Assertions
+  // =======================================================================
+  block(Verification) {
+    block(Verification.Assert) {
+      AssertProperty(
+        Sequence.BoolSequence(io.err.sbParityErr) |=> Sequence.BoolSequence(io.err.sbParityErr),
+        label = Some("LinkNodeParityErrorIsSticky")
+      )
+    }
+    block(Verification.Cover) {
+      val sawFreezeBusy = RegInit(false.B)
+
+      when(io.ctrl.freezeAcceptingPackets && !serializer.io.in.ready) {
+        sawFreezeBusy := true.B
+      }.elsewhen(io.ctrl.allPacketsSent) {
+        sawFreezeBusy := false.B
+      }
+
+      cover(io.ctrl.freezeAcceptingPackets && io.txIn.valid && !io.txIn.ready, "LinkNodeFreezeBlocksTxAccept")
+      cover(io.ctrl.allPacketsSent, "LinkNodeAllPacketsSent")
+      cover(io.ctrl.allPacketsSent && sawFreezeBusy, "LinkNodeFreezeDrainsToAllPacketsSent")
+      cover(txAccept && (io.ctrl.txMode === SBRxTxMode.RAW || txIsWoData), "LinkNodeTx64bPacketAccepted")
+      cover(txAccept && io.ctrl.txMode === SBRxTxMode.PACKET && !txIsWoData, "LinkNodeTx128bPacketAccepted")
+      cover(io.rxOut.fire && (io.ctrl.rxMode === SBRxTxMode.RAW || rxIsWoData), "LinkNodeRx64bPacketEmitted")
+      cover(io.rxOut.fire && io.ctrl.rxMode === SBRxTxMode.PACKET && !rxIsWoData, "LinkNodeRx128bPacketEmitted")
+      cover(deserializer.io.out.valid && cpError, "LinkNodeCpParityErrorDrop")
+      cover(deserializer.io.out.valid && dpError, "LinkNodeDpParityErrorDrop")
+      cover(io.err.desTimedout, "LinkNodeDeserializerTimeout")
+      cover(io.err.rxPriorityQueuesFull, "LinkNodeRxPriorityQueueFull")
+    }
+  }
 }
 
 object MainSBLinkNode extends App {

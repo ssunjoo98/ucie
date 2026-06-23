@@ -1,6 +1,9 @@
 package edu.berkeley.cs.uciedigital.sideband
 
 import chisel3._
+import chisel3.layer.block
+import chisel3.layers.Verification
+import chisel3.ltl._
 import circt.stage.ChiselStage
 import chisel3.util._
 
@@ -50,8 +53,8 @@ extends Module {
   })
 
   // Helper functions
-  def getDstLayer(msg: UInt): UInt = msg(25, 24)
-  def isRemote(msg: UInt): Bool = msg(26) === 1.U
+  def getDstLayer(msg: UInt): UInt = msg(57, 56)
+  def isRemote(msg: UInt): Bool = msg(58) === 1.U
   def matchesAnyId(dstId: UInt, idList: Seq[Int]): Bool = {
     idList.map(id => dstId === id.U(2.W)).foldLeft(false.B)(_ || _)
   }
@@ -121,7 +124,62 @@ extends Module {
   io.currLayer.from.ready := Mux(currToUpper, arbiterToUpperLayer.io.in(1).ready,
                              Mux(currToLower, arbiterToLowerLayer.io.in(1).ready, true.B))
 
-  io.err.invalidRouteCurr := io.currLayer.from.valid && currMalformed  // Trigger error                             
+  io.err.invalidRouteCurr := io.currLayer.from.valid && currMalformed  // Trigger error
+
+  // =======================================================================
+  // Assertions
+  // =======================================================================
+  block(Verification) {
+    block(Verification.Assert) {
+      AssertProperty(
+        Sequence.BoolSequence(io.currLayer.to.fire) |->
+          Sequence.BoolSequence(getDstLayer(io.currLayer.to.bits) === layerId.U),
+        label = Some("SwitchCurrEgressAddressedToCurrLayer")
+      )
+      AssertProperty(
+        Sequence.BoolSequence(io.upperLayer.to.fire) |->
+          Sequence.BoolSequence(matchesAnyId(getDstLayer(io.upperLayer.to.bits), upperIds)),
+        label = Some("SwitchUpperEgressAddressedToUpperIds")
+      )
+      AssertProperty(
+        Sequence.BoolSequence(io.lowerLayer.to.fire) |->
+          Sequence.BoolSequence(isRemote(io.lowerLayer.to.bits) ||
+            matchesAnyId(getDstLayer(io.lowerLayer.to.bits), lowerIds)),
+        label = Some("SwitchLowerEgressAddressedToLowerIdsOrRemote")
+      )
+    }
+    block(Verification.Cover) {
+      cover(io.upperLayer.from.fire && upperToCurr, "SwitchUpperToCurrRoute")
+      if(lowerIds.nonEmpty) {
+        cover(io.upperLayer.from.fire && upperToLower, "SwitchUpperToLowerRoute")
+      }
+      cover(io.lowerLayer.from.fire && lowerToCurr, "SwitchLowerToCurrRoute")
+      if(upperIds.nonEmpty) {
+        cover(io.lowerLayer.from.fire && lowerToUpper, "SwitchLowerToUpperRoute")
+        cover(io.currLayer.from.fire && currToUpper, "SwitchCurrToUpperRoute")
+      }
+      cover(io.currLayer.from.fire && currToLower, "SwitchCurrToLowerRoute")
+
+      cover(io.err.invalidRouteUpper, "SwitchInvalidRouteUpper")
+      cover(io.err.invalidRouteCurr, "SwitchInvalidRouteCurr")
+      cover(io.err.invalidRouteLower, "SwitchInvalidRouteLower")
+      cover(io.upperLayer.from.valid && !io.upperLayer.from.ready, "SwitchUpperIngressBackpressure")
+      cover(io.currLayer.from.valid && !io.currLayer.from.ready, "SwitchCurrIngressBackpressure")
+      cover(io.lowerLayer.from.valid && !io.lowerLayer.from.ready, "SwitchLowerIngressBackpressure")
+
+      cover(arbiterToCurrLayer.io.in(0).valid && arbiterToCurrLayer.io.in(1).valid, "SwitchCurrEgressContention")
+      cover(arbiterToCurrLayer.io.out.fire && arbiterToCurrLayer.io.chosen === 0.U, "SwitchCurrEgressUpperWins")
+      cover(arbiterToCurrLayer.io.out.fire && arbiterToCurrLayer.io.chosen === 1.U, "SwitchCurrEgressLowerWins")
+      if(upperIds.nonEmpty) {
+        cover(arbiterToUpperLayer.io.in(0).valid && arbiterToUpperLayer.io.in(1).valid, "SwitchUpperEgressContention")
+        cover(arbiterToUpperLayer.io.out.fire && arbiterToUpperLayer.io.chosen === 0.U, "SwitchUpperEgressLowerWins")
+        cover(arbiterToUpperLayer.io.out.fire && arbiterToUpperLayer.io.chosen === 1.U, "SwitchUpperEgressCurrWins")
+      }
+      cover(arbiterToLowerLayer.io.in(0).valid && arbiterToLowerLayer.io.in(1).valid, "SwitchLowerEgressContention")
+      cover(arbiterToLowerLayer.io.out.fire && arbiterToLowerLayer.io.chosen === 0.U, "SwitchLowerEgressUpperWins")
+      cover(arbiterToLowerLayer.io.out.fire && arbiterToLowerLayer.io.chosen === 1.U, "SwitchLowerEgressCurrWins")
+    }
+  }
 }
 
 object MainSBSwitch extends App {
@@ -130,10 +188,8 @@ object MainSBSwitch extends App {
     args = Array("-td", "./generatedVerilog/sideband"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables"
+      "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",  
     ),
   )
 }

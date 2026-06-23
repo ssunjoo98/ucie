@@ -18,10 +18,16 @@
 package edu.berkeley.cs.uciedigital.sideband
 
 import chisel3._
+import chisel3.layer.block
+import chisel3.layers.Verification
+import chisel3.ltl._
 import circt.stage.ChiselStage
 import chisel3.util._
 import scala.math.max
 
+// ============================================================================
+// Sideband Interface Serializer
+// ============================================================================
 class SidebandInterfaceSerializer(sbMsgWidth: Int, ncWidth: Int) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(UInt(sbMsgWidth.W)))
@@ -64,8 +70,28 @@ class SidebandInterfaceSerializer(sbMsgWidth: Int, ncWidth: Int) extends Module 
     inProgress := true.B
     beatCounter := 0.U
   }
+
+  // =======================================================================
+  // Assertions
+  // =======================================================================
+  block(Verification) {
+    block(Verification.Assert) {
+      AssertProperty(
+        Sequence.BoolSequence(io.in.fire) |=> Sequence.BoolSequence(io.out.valid).repeat(numBeats),
+        label = Some("SerializerEmitsAllBeatsAfterAccept")
+      )
+    }
+    block(Verification.Cover) {
+      cover(io.in.fire, "InterfaceSerializerInputFire")
+      cover(io.out.valid && isLastBeat, "InterfaceSerializerLastBeat")
+      cover(inProgress && isLastBeat && io.in.valid && io.in.ready, "InterfaceSerializerBackToBackFinalBeatAccept")
+    }
+  }
 }
 
+// ============================================================================
+// Sideband Interface Deserializer
+// ============================================================================
 class SidebandInterfaceDeserializer(sbMsgWidth: Int, ncWidth: Int) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Valid(UInt(ncWidth.W)))
@@ -85,24 +111,43 @@ class SidebandInterfaceDeserializer(sbMsgWidth: Int, ncWidth: Int) extends Modul
   io.out.bits := dataReg.asUInt
   io.out.valid := inProgress && (beatCounter === 0.U)
 
-  when(!io.in.valid) {
-    inProgress := false.B
-    beatCounter := 0.U
-  }
-
   // As per spec can be assured that consecutive phases of a packet will come in consecutive 
   // clock cycles
   when(io.in.valid) {
     dataReg(beatCounter) := io.in.bits
     inProgress := true.B
 
-    when(beatCounter =/= maxBeats.U) {       
+    when(beatCounter =/= maxBeats.U) {
       beatCounter := beatCounter + 1.U
     }.otherwise {
       beatCounter := 0.U
     }
+  }.otherwise {
+    inProgress := false.B
+    beatCounter := 0.U
   }
-} 
+
+  // =======================================================================
+  // Assertions
+  // =======================================================================
+  if (numBeats > 1) {
+    block(Verification) {
+      block(Verification.Assert) {
+        AssertProperty(
+          Sequence.BoolSequence(io.out.valid) |=> Sequence.BoolSequence(!io.out.valid),
+          label = Some("DeserializerOutputIsSingleCyclePulse")
+        )
+      }
+      block(Verification.Cover) {
+        cover(io.in.valid && !inProgress, "InterfaceDeserializerFirstBeat")
+        cover(io.in.valid && inProgress && beatCounter === maxBeats.U, "InterfaceDeserializerFinalBeat")
+        cover(!io.in.valid && inProgress && beatCounter =/= 0.U, "InterfaceDeserializerGapAbort")
+        cover(io.out.valid, "InterfaceDeserializerOutputPulse")
+        cover(io.out.valid && io.in.valid, "InterfaceDeserializerStreamingOutputWithNewBeat")
+      }
+    }
+  }
+}
 
 
 object MainSBIntfSer extends App {
@@ -111,10 +156,8 @@ object MainSBIntfSer extends App {
     args = Array("-td", "./generatedVerilog/sideband"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables"
+      "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",
     ),
   )
 }
@@ -125,10 +168,8 @@ object MainSBIntfDes extends App {
     args = Array("-td", "./generatedVerilog/sideband"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables"
+      "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",
     ),
   )
 }

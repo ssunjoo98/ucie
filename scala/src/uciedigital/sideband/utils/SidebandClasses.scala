@@ -6,8 +6,6 @@ case class SidebandParams(
   
   val maxCrd: Int = 32,
 
-  val sbLinkAsyncQueueDepth: Int = 8,
-
   val sbLinkWidth: Int = 1
 )
 
