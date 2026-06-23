@@ -2,7 +2,6 @@ package edu.berkeley.cs.uciedigital.utils
 
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
-import edu.berkeley.cs.uciedigital.utils.TestHelpers.debug
 import org.scalatest.funspec.AnyFunSpec
 
 class ParallelGaloisLFSRTest extends AnyFunSpec with ChiselSim {
@@ -11,6 +10,12 @@ class ParallelGaloisLFSRTest extends AnyFunSpec with ChiselSim {
   val dataWidth = 32
   val polynomial = 0x210125
   val printDebug = false
+
+  def debug(printDebug: Boolean, message: String): Unit = {
+    if (printDebug) {
+      println(message)
+    }
+  }
 
   def bitString(value: BigInt, width: Int): String =
     value.toString(2).reverse.padTo(width, '0').reverse
