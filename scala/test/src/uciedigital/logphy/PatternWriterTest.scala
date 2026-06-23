@@ -7,7 +7,9 @@ import edu.berkeley.cs.uciedigital.utils.ReferenceLFSR
 import org.scalatest.funspec.AnyFunSpec
 import scala.util.Random
 
+// ============================================================================
 // Harness
+// ============================================================================
 class PatternWriterWithLfsrHarness(afeParams: AfeParams) extends Module {
   val io = IO(new Bundle {
     val interfaceIo = new PatternWriterIO
@@ -41,12 +43,19 @@ class PatternWriterWithLfsrHarness(afeParams: AfeParams) extends Module {
 }
 
 class PatternWriterTest extends AnyFunSpec with ChiselSim {
-  val serializerRatio = 32
+
+  // ==========================================================================
+  // Test configuration
+  // ==========================================================================
+  val serializerRatios = Seq(4, 8, 16, 32, 64)
   val lanes = 16
   val maxReadyLowCycles = 3
   val randomSeed = 0x70617474L
-  val printDebug = false          // Set true to see output to screen
+  val printDebug = false // Set true to see output to screen
 
+  // ==========================================================================
+  // LFSR reference parameters
+  // ==========================================================================
   val lfsrWidth = 23
   val polynomial = BigInt(0x210125)
   val laneSeeds = Seq(
@@ -60,6 +69,10 @@ class PatternWriterTest extends AnyFunSpec with ChiselSim {
     BigInt(0x1BB807)
   )
 
+  // ==========================================================================
+  // Scoreboard types
+  // ==========================================================================
+  // One cycle of expected mainband output.
   case class ExpectedMainband(
     data: Seq[BigInt],
     valid: BigInt,
@@ -68,91 +81,213 @@ class PatternWriterTest extends AnyFunSpec with ChiselSim {
     trk: BigInt
   )
 
+  // One field of the mainband output paired with its expected value.
   case class ScoreboardRow(field: String, actual: Bits, expected: BigInt)
 
-  def params = AfeParams(mbSerializerRatio = serializerRatio, mbLanes = lanes)
+  // ==========================================================================
+  // Reference model
+  // ==========================================================================
+  // Holds all ser. ratio dependent reference state and the stimulus driver
+  class RefModel(val serializerRatio: Int) {
+    def params = AfeParams(mbSerializerRatio = serializerRatio, mbLanes = lanes)
 
-  def exactNumCycles(patternName: String, numBits: Int): Int = {
-    require(
-      numBits % serializerRatio == 0,
-      s"$patternName has $numBits bits, which is not divisible by serializer ratio $serializerRatio"
-    )
-    numBits / serializerRatio
-  }
+    // ------------------------------------------------------------------------
+    // Reference pattern words
+    // ------------------------------------------------------------------------
+    // Expands a repeating bit pattern into the sequence of ser. ratio wide
+    // words the PatternWriter is expected to output per fire
+    def repeatedPatternWords(pattern: BigInt, patternWidth: Int): Seq[BigInt] = {
+      val commonDivisor = BigInt(patternWidth).gcd(BigInt(serializerRatio)).toInt
+      val numPhases = patternWidth / commonDivisor
 
-  def repeatedPatternWords(pattern: BigInt, patternWidth: Int): Seq[BigInt] = {
-    val commonDivisor = BigInt(patternWidth).gcd(BigInt(serializerRatio)).toInt
-    val numPhases = patternWidth / commonDivisor
-
-    Seq.tabulate(numPhases) { phase =>
-      Seq.tabulate(serializerRatio) { bit =>
-        ((pattern >> ((phase * serializerRatio + bit) % patternWidth)) & 1) << bit
-      }.foldLeft(BigInt(0))(_ | _)
-    }
-  }
-
-  val clkRepairPatternWords = repeatedPatternWords(BigInt("000055555555", 16), 48)
-  val valTrainPatternWords = repeatedPatternWords(BigInt("00001111", 2), 8)
-  val fwClkPPatternWords = repeatedPatternWords(BigInt("01010101", 2), 8)
-  val fwClkNPatternWords = repeatedPatternWords(BigInt("10101010", 2), 8)
-  val perLaneIdPatternWords = Seq.tabulate(lanes) { lane =>
-    val perLaneIdPattern =
-      (BigInt("1010", 2) << 12) | (BigInt(lane & 0xff) << 4) | BigInt("1010", 2)
-    repeatedPatternWords(perLaneIdPattern, 16)
-  }
-
-  val clkRepairCycles = exactNumCycles("CLKREPAIR", 128 * 48)
-  val valTrainCycles = exactNumCycles("VALTRAIN", 128 * 8)
-  val perLaneIdCycles = exactNumCycles("PERLANEID", 128 * 16)
-  val lfsrCycles = exactNumCycles("LFSR", 4096)
-
-  def laneReferenceModels(): Seq[ReferenceLFSR] =
-    Seq.tabulate(lanes) { lane =>
-      new ReferenceLFSR(laneSeeds(lane % laneSeeds.length), polynomial, lfsrWidth)
+      Seq.tabulate(numPhases) { phase =>
+        Seq.tabulate(serializerRatio) { bit =>
+          ((pattern >> ((phase * serializerRatio + bit) % patternWidth)) & 1) << bit
+        }.foldLeft(BigInt(0))(_ | _)
+      }
     }
 
-  def clearRequest(dut: PatternWriterWithLfsrHarness): Unit = {
-    dut.io.interfaceIo.req.valid.poke(false.B)
-    dut.io.interfaceIo.req.bits.patternType.poke(PatternSelect.CLKREPAIR)
-  }
-
-  def hexWord(value: BigInt): String = {
-    val hexDigits = (serializerRatio + 3) / 4
-    "0x" + value.toString(16).reverse.padTo(hexDigits, '0').reverse
-  }
-
-  def padRight(value: String, width: Int): String =
-    value + (" " * math.max(0, width - value.length))
-
-  def scoreboardRows(dut: PatternWriterWithLfsrHarness, expected: ExpectedMainband): Seq[ScoreboardRow] =
-    Seq(
-      ScoreboardRow("valid", dut.io.mbTxLaneIo.bits.valid, expected.valid),
-      ScoreboardRow("clkP", dut.io.mbTxLaneIo.bits.clkP, expected.clkP),
-      ScoreboardRow("clkN", dut.io.mbTxLaneIo.bits.clkN, expected.clkN),
-      ScoreboardRow("trk", dut.io.mbTxLaneIo.bits.trk, expected.trk)
-    ) ++ expected.data.zipWithIndex.map {
-      case (word, lane) => ScoreboardRow(s"data[$lane]", dut.io.mbTxLaneIo.bits.data(lane), word)
+    val clkRepairPatternWords = repeatedPatternWords(BigInt("000055555555", 16), 48)
+    val valTrainPatternWords = repeatedPatternWords(BigInt("00001111", 2), 8)
+    val fwClkPPatternWords = repeatedPatternWords(BigInt("01010101", 2), 8)
+    val fwClkNPatternWords = repeatedPatternWords(BigInt("10101010", 2), 8)
+    val perLaneIdPatternWords = Seq.tabulate(lanes) { lane =>
+      val perLaneIdPattern =
+        (BigInt("1010", 2) << 12) | (BigInt(lane & 0xff) << 4) | BigInt("1010", 2)
+      repeatedPatternWords(perLaneIdPattern, 16)
     }
 
-  def checkScoreboard(
-    dut: PatternWriterWithLfsrHarness,
-    patternName: String,
-    fireCount: Int,
-    totalCycles: Int,
-    expected: ExpectedMainband,
-    context: String,
-    printThisCycle: Boolean
-  ): Unit = {
-    val rows = scoreboardRows(dut, expected)
+    // ------------------------------------------------------------------------
+    // Cycle counts
+    // ------------------------------------------------------------------------
+    def exactNumCycles(patternName: String, numBits: Int): Int = {
+      require(
+        numBits % serializerRatio == 0,
+        s"$patternName has $numBits bits, which is not divisible by serializer ratio $serializerRatio"
+      )
+      numBits / serializerRatio
+    }
 
-    if (printDebug && printThisCycle) {
+    val clkRepairCycles = exactNumCycles("CLKREPAIR", 128 * 48)
+    val valTrainCycles = exactNumCycles("VALTRAIN", 128 * 8)
+    val perLaneIdCycles = exactNumCycles("PERLANEID", 128 * 16)
+    val lfsrCycles = exactNumCycles("LFSR", 4096)
+
+    // ------------------------------------------------------------------------
+    // Reference LFSR model
+    // ------------------------------------------------------------------------
+    def laneReferenceModels(): Seq[ReferenceLFSR] =
+      Seq.tabulate(lanes) { lane =>
+        new ReferenceLFSR(laneSeeds(lane % laneSeeds.length), polynomial, lfsrWidth)
+      }
+
+    // ------------------------------------------------------------------------
+    // Expected output
+    // ------------------------------------------------------------------------
+    // Expected mainband output for the given pattern on a given fire.
+    def expectedOutput(patternType: PatternSelect.Type, fireCount: Int, refs: Seq[ReferenceLFSR]): ExpectedMainband = {
+      patternType match {
+        case PatternSelect.CLKREPAIR =>
+          val clkRepairWord = clkRepairPatternWords(fireCount % clkRepairPatternWords.length)
+          ExpectedMainband(
+            data = Seq.fill(lanes)(BigInt(0)),
+            valid = BigInt(0),
+            clkP = clkRepairWord,
+            clkN = clkRepairWord,
+            trk = clkRepairWord
+          )
+
+        case PatternSelect.VALTRAIN =>
+          ExpectedMainband(
+            data = Seq.fill(lanes)(BigInt(0)),
+            valid = valTrainPatternWords(fireCount % valTrainPatternWords.length),
+            clkP = fwClkPPatternWords(fireCount % fwClkPPatternWords.length),
+            clkN = fwClkNPatternWords(fireCount % fwClkNPatternWords.length),
+            trk = BigInt(0)
+          )
+
+        case PatternSelect.PERLANEID =>
+          ExpectedMainband(
+            data = Seq.tabulate(lanes) { lane =>
+              perLaneIdPatternWords(lane)(fireCount % perLaneIdPatternWords(lane).length)
+            },
+            valid = valTrainPatternWords(fireCount % valTrainPatternWords.length),
+            clkP = fwClkPPatternWords(fireCount % fwClkPPatternWords.length),
+            clkN = fwClkNPatternWords(fireCount % fwClkNPatternWords.length),
+            trk = BigInt(0)
+          )
+
+        case PatternSelect.LFSR =>
+          ExpectedMainband(
+            data = refs.map(_.peekOutputWord(serializerRatio)),
+            valid = valTrainPatternWords(fireCount % valTrainPatternWords.length),
+            clkP = fwClkPPatternWords(fireCount % fwClkPPatternWords.length),
+            clkN = fwClkNPatternWords(fireCount % fwClkNPatternWords.length),
+            trk = BigInt(0)
+          )
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // DUT stimulus helpers
+    // ------------------------------------------------------------------------
+    def clearRequest(dut: PatternWriterWithLfsrHarness): Unit = {
+      dut.io.interfaceIo.req.valid.poke(false.B)
+      dut.io.interfaceIo.req.bits.patternType.poke(PatternSelect.CLKREPAIR)
+    }
+
+    // Spuriously asserts req.valid mid-pattern and checks the DUT ignores it
+    // (req.ready stays low while busy).
+    def randomlyPulseRequestWhileBusy(dut: PatternWriterWithLfsrHarness, random: Random, context: String): Unit = {
+      val pulseBusyRequest = random.nextBoolean()
+      dut.io.interfaceIo.req.valid.poke(pulseBusyRequest.B)
+      dut.io.interfaceIo.req.bits.patternType.poke(PatternSelect.LFSR)
+      dut.io.interfaceIo.req.ready.expect(false.B, s"$context req.ready while busy")
+    }
+
+    // ------------------------------------------------------------------------
+    // Scoreboard
+    // ------------------------------------------------------------------------
+    // The mainband output fields paired with their expected values.
+    def scoreboardRows(dut: PatternWriterWithLfsrHarness, expected: ExpectedMainband): Seq[ScoreboardRow] =
+      Seq(
+        ScoreboardRow("valid", dut.io.mbTxLaneIo.bits.valid, expected.valid),
+        ScoreboardRow("clkP", dut.io.mbTxLaneIo.bits.clkP, expected.clkP),
+        ScoreboardRow("clkN", dut.io.mbTxLaneIo.bits.clkN, expected.clkN),
+        ScoreboardRow("trk", dut.io.mbTxLaneIo.bits.trk, expected.trk)
+      ) ++ expected.data.zipWithIndex.map {
+        case (word, lane) => ScoreboardRow(s"data[$lane]", dut.io.mbTxLaneIo.bits.data(lane), word)
+      }
+
+    // Checks every mainband field against the reference, optionally printing it.
+    def checkScoreboard(
+      dut: PatternWriterWithLfsrHarness,
+      patternName: String,
+      fireCount: Int,
+      totalCycles: Int,
+      expected: ExpectedMainband,
+      context: String,
+      printThisCycle: Boolean
+    ): Unit = {
+      val rows = scoreboardRows(dut, expected)
+
+      if (printDebug && printThisCycle) {
+        printScoreboard(dut, patternName, fireCount, totalCycles, rows)
+      }
+
+      rows.foreach { row =>
+        row.actual.expect(row.expected.U, s"$context ${row.field} expected ${hexWord(row.expected)}")
+      }
+    }
+
+    // Checks the LFSR control signals match LFSR-vs-non-LFSR mode expectations.
+    def expectLfsrCtrl(
+      dut: PatternWriterWithLfsrHarness,
+      isLfsrPattern: Boolean,
+      requestCycle: Boolean,
+      txFire: Boolean,
+      finalFire: Boolean,
+      context: String
+    ): Unit = {
+      dut.io.txLfsrCtrl.valid.expect(
+        (isLfsrPattern && !requestCycle).B,
+        s"$context txLfsrCtrl.valid"
+      )
+      dut.io.txLfsrCtrl.resetLfsr.expect(
+        (isLfsrPattern && requestCycle).B,
+        s"$context txLfsrCtrl.resetLfsr"
+      )
+      dut.io.txLfsrCtrl.increment.expect(
+        (isLfsrPattern && !requestCycle && txFire && !finalFire).B,
+        s"$context txLfsrCtrl.increment"
+      )
+    }
+
+    // ------------------------------------------------------------------------
+    // Debug printing
+    // ------------------------------------------------------------------------
+    def hexWord(value: BigInt): String = {
+      val hexDigits = (serializerRatio + 3) / 4
+      "0x" + value.toString(16).reverse.padTo(hexDigits, '0').reverse
+    }
+
+    def padRight(value: String, width: Int): String =
+      value + (" " * math.max(0, width - value.length))
+
+    def printScoreboard(
+      dut: PatternWriterWithLfsrHarness,
+      patternName: String,
+      fireCount: Int,
+      totalCycles: Int,
+      rows: Seq[ScoreboardRow]
+    ): Unit = {
       val fieldColumnWidth = math.max(10, rows.map(_.field.length).max)
       val valueColumnWidth = math.max(10, hexWord(BigInt(0)).length)
       val divider = "=" * (fieldColumnWidth + (2 * valueColumnWidth) + 24)
       val separator = "-" * (fieldColumnWidth + (2 * valueColumnWidth) + 24)
 
       println(s"[PatternWriterTest] $divider")
-      println(s"[PatternWriterTest] $patternName fire ${fireCount + 1}/$totalCycles")
+      println(s"[PatternWriterTest] $patternName (serRatio=$serializerRatio) fire ${fireCount + 1}/$totalCycles")
       println(
         s"[PatternWriterTest] complete=${dut.io.interfaceIo.resp.complete.peek().litToBoolean} " +
           s"lfsrValid=${dut.io.txLfsrCtrl.valid.peek().litToBoolean} " +
@@ -174,198 +309,127 @@ class PatternWriterTest extends AnyFunSpec with ChiselSim {
       }
     }
 
-    rows.foreach { row =>
-      row.actual.expect(row.expected.U, s"$context ${row.field} expected ${hexWord(row.expected)}")
-    }
-  }
+    // ------------------------------------------------------------------------
+    // Pattern driver
+    // ------------------------------------------------------------------------
+    // Drives one full pattern: requests it, then fires every cycle while
+    // injecting random TX backpressure and spurious requests, checking the
+    // mainband output and LFSR control signals throughout.
+    def runPattern(
+      dut: PatternWriterWithLfsrHarness,
+      patternName: String,
+      patternType: PatternSelect.Type,
+      totalCycles: Int,
+      random: Random
+    ): Unit = {
+      val isLfsrPattern = patternName == "LFSR"
+      val refs = laneReferenceModels()
 
-  def expectedOutput(patternType: PatternSelect.Type, fireCount: Int, refs: Seq[ReferenceLFSR]): ExpectedMainband = {
-    patternType match {
-      case PatternSelect.CLKREPAIR =>
-        val clkRepairWord = clkRepairPatternWords(fireCount % clkRepairPatternWords.length)
-        ExpectedMainband(
-          data = Seq.fill(lanes)(BigInt(0)),
-          valid = BigInt(0),
-          clkP = clkRepairWord,
-          clkN = clkRepairWord,
-          trk = clkRepairWord
-        )
+      // Request the pattern.
+      dut.io.interfaceIo.req.bits.patternType.poke(patternType)
+      dut.io.interfaceIo.req.valid.poke(true.B)
+      dut.io.interfaceIo.req.ready.expect(true.B, s"$patternName request req.ready")
+      dut.io.mbTxLaneIo.valid.expect(false.B, s"$patternName request mbTxLaneIo.valid")
+      dut.io.interfaceIo.resp.complete.expect(false.B, s"$patternName request resp.complete")
+      expectLfsrCtrl(dut, isLfsrPattern, requestCycle = true, txFire = false, finalFire = false, s"$patternName request")
+      dut.clock.step()
+      clearRequest(dut)
 
-      case PatternSelect.VALTRAIN =>
-        ExpectedMainband(
-          data = Seq.fill(lanes)(BigInt(0)),
-          valid = valTrainPatternWords(fireCount % valTrainPatternWords.length),
-          clkP = fwClkPPatternWords(fireCount % fwClkPPatternWords.length),
-          clkN = fwClkNPatternWords(fireCount % fwClkNPatternWords.length),
-          trk = BigInt(0)
-        )
+      // Fire the pattern for the expected number of cycles.
+      for (fireCount <- 0 until totalCycles) {
+        val readyLowCycles = random.nextInt(maxReadyLowCycles + 1)
+        val expected = expectedOutput(patternType, fireCount, refs)
 
-      case PatternSelect.PERLANEID =>
-        ExpectedMainband(
-          data = Seq.tabulate(lanes) { lane =>
-            perLaneIdPatternWords(lane)(fireCount % perLaneIdPatternWords(lane).length)
-          },
-          valid = valTrainPatternWords(fireCount % valTrainPatternWords.length),
-          clkP = fwClkPPatternWords(fireCount % fwClkPPatternWords.length),
-          clkN = fwClkNPatternWords(fireCount % fwClkNPatternWords.length),
-          trk = BigInt(0)
-        )
+        // Hold mbTxLaneIo.ready low for a random number of cycles, then fire.
+        for (attempt <- 0 to readyLowCycles) {
+          val txFire = attempt == readyLowCycles
+          val finalFire = txFire && (fireCount == totalCycles - 1)
+          val context =
+            if (txFire) s"$patternName fire $fireCount"
+            else s"$patternName fire $fireCount stall $attempt"
 
-      case PatternSelect.LFSR =>
-        ExpectedMainband(
-          data = refs.map(_.peekOutputWord(serializerRatio)),
-          valid = valTrainPatternWords.head,
-          clkP = fwClkPPatternWords.head,
-          clkN = fwClkNPatternWords.head,
-          trk = BigInt(0)
-        )
-    }
-  }
+          dut.io.mbTxLaneIo.ready.poke(txFire.B)
+          randomlyPulseRequestWhileBusy(dut, random, context)
+          dut.io.mbTxLaneIo.valid.expect(true.B, s"$context valid")
+          dut.io.interfaceIo.resp.complete.expect(finalFire.B, s"$context complete")
+          checkScoreboard(
+            dut,
+            patternName,
+            fireCount,
+            totalCycles,
+            expected,
+            context,
+            printThisCycle = txFire // prints when there's no backpressure
+          )
+          expectLfsrCtrl(dut, isLfsrPattern, requestCycle = false, txFire = txFire, finalFire = finalFire, context)
+          dut.clock.step()
+          clearRequest(dut)
+        }
 
-  // Ensures signals controlling the LFSR are correct when it is/isn't in
-  // LFSR mode
-  def expectLfsrCtrl(
-    dut: PatternWriterWithLfsrHarness,
-    isLfsrPattern: Boolean,
-    requestCycle: Boolean,
-    txFire: Boolean,
-    finalFire: Boolean,
-    context: String
-  ): Unit = {
-    dut.io.txLfsrCtrl.valid.expect(
-      (isLfsrPattern && !requestCycle).B,
-      s"$context txLfsrCtrl.valid"
-    )
-    dut.io.txLfsrCtrl.resetLfsr.expect(
-      (isLfsrPattern && requestCycle).B,
-      s"$context txLfsrCtrl.resetLfsr"
-    )
-    dut.io.txLfsrCtrl.increment.expect(
-      (isLfsrPattern && !requestCycle && txFire && !finalFire).B,
-      s"$context txLfsrCtrl.increment"
-    )
-  }
-
-  def randomlyPulseRequestWhileBusy(dut: PatternWriterWithLfsrHarness, random: Random, context: String): Unit = {
-    val pulseBusyRequest = random.nextBoolean()
-    dut.io.interfaceIo.req.valid.poke(pulseBusyRequest.B)
-    dut.io.interfaceIo.req.bits.patternType.poke(PatternSelect.LFSR)
-    dut.io.interfaceIo.req.ready.expect(false.B, s"$context req.ready while busy")
-  }
-
-  def runPattern(
-    dut: PatternWriterWithLfsrHarness,
-    patternName: String,
-    patternType: PatternSelect.Type,
-    totalCycles: Int,
-    random: Random
-  ): Unit = {
-    val isLfsrPattern = patternName == "LFSR"
-    val refs = laneReferenceModels()
-
-    // Setup
-    dut.io.interfaceIo.req.bits.patternType.poke(patternType)
-    dut.io.interfaceIo.req.valid.poke(true.B)
-    dut.io.interfaceIo.req.ready.expect(true.B, s"$patternName request req.ready")
-    dut.io.mbTxLaneIo.valid.expect(false.B, s"$patternName request mbTxLaneIo.valid")
-    dut.io.interfaceIo.resp.complete.expect(false.B, s"$patternName request resp.complete")
-    expectLfsrCtrl(dut, isLfsrPattern, requestCycle = true, txFire = false, finalFire = false, s"$patternName request")
-    dut.clock.step()
-    clearRequest(dut)
-
-    // Run the pattern for the number of cycles
-    for (fireCount <- 0 until totalCycles) {
-      val readyLowCycles = random.nextInt(maxReadyLowCycles + 1)
-      val expected = expectedOutput(patternType, fireCount, refs)
-
-      // Keep mbTxLaneIo.ready low for some random number of cycles before HIGH
-      for (attempt <- 0 to readyLowCycles) {
-        val txFire = attempt == readyLowCycles
-        val finalFire = txFire && (fireCount == totalCycles - 1)
-        val context =
-          if (txFire) s"$patternName fire $fireCount"
-          else s"$patternName fire $fireCount stall $attempt"
-
-        dut.io.mbTxLaneIo.ready.poke(txFire.B)
-        randomlyPulseRequestWhileBusy(dut, random, context)
-        dut.io.mbTxLaneIo.valid.expect(true.B, s"$context valid")
-        dut.io.interfaceIo.resp.complete.expect(finalFire.B, s"$context complete")
-        checkScoreboard(
-          dut,
-          patternName,
-          fireCount,
-          totalCycles,
-          expected,
-          context,
-          printThisCycle = txFire   // prints when there's no backpressure
-        )
-        expectLfsrCtrl(
-          dut,
-          isLfsrPattern,
-          requestCycle = false,
-          txFire = txFire,
-          finalFire = finalFire,
-          context
-        )
-        dut.clock.step()
-        clearRequest(dut)
+        if (isLfsrPattern && fireCount != totalCycles - 1) {
+          refs.foreach(_.advanceState(serializerRatio))
+        }
       }
 
-      if (isLfsrPattern && fireCount != totalCycles - 1) {
-        refs.foreach(_.advanceState(serializerRatio))
-      }
+      // Pattern complete: DUT should be idle and ready for the next request.
+      dut.io.mbTxLaneIo.ready.poke(false.B)
+      clearRequest(dut)
+      dut.io.interfaceIo.req.ready.expect(true.B, s"$patternName done req.ready")
+      dut.io.mbTxLaneIo.valid.expect(false.B, s"$patternName done mbTxLaneIo.valid")
+      dut.io.interfaceIo.resp.complete.expect(false.B, s"$patternName done resp.complete")
+      expectLfsrCtrl(dut, isLfsrPattern = false, requestCycle = false, txFire = false, finalFire = false, s"$patternName done")
     }
-
-    dut.io.mbTxLaneIo.ready.poke(false.B)
-    clearRequest(dut)
-    dut.io.interfaceIo.req.ready.expect(true.B, s"$patternName done req.ready")
-    dut.io.mbTxLaneIo.valid.expect(false.B, s"$patternName done mbTxLaneIo.valid")
-    dut.io.interfaceIo.resp.complete.expect(false.B, s"$patternName done resp.complete")
-    expectLfsrCtrl(dut, isLfsrPattern = false, requestCycle = false, txFire = false, finalFire = false, s"$patternName done")
   }
 
+  // ==========================================================================
+  // Tests
+  // ==========================================================================
   describe("PatternWriter") {
-    it("writes CLKREPAIR with randomized request delay and TX backpressure") {
-      simulate(new PatternWriterWithLfsrHarness(params)) { dut =>
-        val random = new Random(randomSeed)
+    serializerRatios.foreach { ratio =>
+      val refModel = new RefModel(ratio)
 
-        clearRequest(dut)
-        dut.io.mbTxLaneIo.ready.poke(false.B)
+      it(s"writes CLKREPAIR with randomized request delay and TX backpressure (serRatio=$ratio)") {
+        simulate(new PatternWriterWithLfsrHarness(refModel.params)) { dut =>
+          val random = new Random(randomSeed)
 
-        runPattern(dut, "CLKREPAIR", PatternSelect.CLKREPAIR, clkRepairCycles, random)
+          refModel.clearRequest(dut)
+          dut.io.mbTxLaneIo.ready.poke(false.B)
+
+          refModel.runPattern(dut, "CLKREPAIR", PatternSelect.CLKREPAIR, refModel.clkRepairCycles, random)
+        }
       }
-    }
 
-    it("writes VALTRAIN with randomized request delay and TX backpressure") {
-      simulate(new PatternWriterWithLfsrHarness(params)) { dut =>
-        val random = new Random(randomSeed)
+      it(s"writes VALTRAIN with randomized request delay and TX backpressure (serRatio=$ratio)") {
+        simulate(new PatternWriterWithLfsrHarness(refModel.params)) { dut =>
+          val random = new Random(randomSeed)
 
-        clearRequest(dut)
-        dut.io.mbTxLaneIo.ready.poke(false.B)
+          refModel.clearRequest(dut)
+          dut.io.mbTxLaneIo.ready.poke(false.B)
 
-        runPattern(dut, "VALTRAIN", PatternSelect.VALTRAIN, valTrainCycles, random)
+          refModel.runPattern(dut, "VALTRAIN", PatternSelect.VALTRAIN, refModel.valTrainCycles, random)
+        }
       }
-    }
 
-    it("writes PERLANEID with randomized request delay and TX backpressure") {
-      simulate(new PatternWriterWithLfsrHarness(params)) { dut =>
-        val random = new Random(randomSeed)
+      it(s"writes PERLANEID with randomized request delay and TX backpressure (serRatio=$ratio)") {
+        simulate(new PatternWriterWithLfsrHarness(refModel.params)) { dut =>
+          val random = new Random(randomSeed)
 
-        clearRequest(dut)
-        dut.io.mbTxLaneIo.ready.poke(false.B)
+          refModel.clearRequest(dut)
+          dut.io.mbTxLaneIo.ready.poke(false.B)
 
-        runPattern(dut, "PERLANEID", PatternSelect.PERLANEID, perLaneIdCycles, random)
+          refModel.runPattern(dut, "PERLANEID", PatternSelect.PERLANEID, refModel.perLaneIdCycles, random)
+        }
       }
-    }
 
-    it("writes LFSR with randomized request delay and TX backpressure") {
-      simulate(new PatternWriterWithLfsrHarness(params)) { dut =>
-        val random = new Random(randomSeed)
+      it(s"writes LFSR with randomized request delay and TX backpressure (serRatio=$ratio)") {
+        simulate(new PatternWriterWithLfsrHarness(refModel.params)) { dut =>
+          val random = new Random(randomSeed)
 
-        clearRequest(dut)
-        dut.io.mbTxLaneIo.ready.poke(false.B)
+          refModel.clearRequest(dut)
+          dut.io.mbTxLaneIo.ready.poke(false.B)
 
-        runPattern(dut, "LFSR", PatternSelect.LFSR, lfsrCycles, random)
+          refModel.runPattern(dut, "LFSR", PatternSelect.LFSR, refModel.lfsrCycles, random)
+        }
       }
     }
   }
