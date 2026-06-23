@@ -8,8 +8,10 @@ class Ser21 extends BlackBox with HasBlackBoxResource {
     val clk = Input(Clock())
     val d0 = Input(UInt(1.W))
     val d1 = Input(UInt(1.W))
-    val dout = Output(UInt(1.W))
+    val out = Output(UInt(1.W))
   })
 
-  addResource("/vsrc/Ser21.v")
+  override def desiredName = "ser21"
+
+  addResource("/vsrc/ser21.v")
 }
