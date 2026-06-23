@@ -227,7 +227,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := (currentState =/= nextState) || (substateReg =/= nextSubstate)
+  sbMsgExchanger.io.clear := (currentState =/= nextState) || (substateReg =/= nextSubstate)
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   // mbLaneCtrlIo Defaults
@@ -493,7 +493,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
             sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                 
             sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_VALVREF_START_RESP
 
-            when(sbMsgExchanger.io.done) {
+            when(sbMsgExchanger.io.exchDone) {
               nextSubstate := MBTrainSubstate.s1
             }
           }
@@ -550,7 +550,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                  
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_VALVREF_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATAVREF
             nextSubstate := MBTrainSubstate.s0            
@@ -578,7 +578,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATAVREF_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -634,7 +634,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                 
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATAVREF_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sSPEEDIDLE
             nextSubstate := MBTrainSubstate.s0            
@@ -679,7 +679,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                  
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_SPEEDIDLE_DONE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sTXSELFCAL
             nextSubstate := MBTrainSubstate.s0
@@ -702,7 +702,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
       sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_TXSELFCAL_DONE_RESP    
 
-      requesterRdy := sbMsgExchanger.io.done
+      requesterRdy := sbMsgExchanger.io.exchDone
       when(io.requesterRdy && io.responderRdy) {
         nextState := MBTrainState.sRXCLKCAL
         mbTrainTxSelfCalDoneReg := false.B  // Reset for possible next iteration                 
@@ -725,7 +725,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_RXCLKCAL_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             when(isCurrFreqGreaterThan32) {
               nextSubstate := MBTrainSubstate.s1
             }.otherwise {
@@ -748,7 +748,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_RXCLKCAL_DONE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {            
             nextState := MBTrainState.sVALTRAINCENTER
             nextSubstate := MBTrainSubstate.s0
@@ -775,7 +775,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                 
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_VALTRAINCENTER_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -831,7 +831,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                 
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_VALTRAINCENTER_DONE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sVALTRAINVREF
             nextSubstate := MBTrainSubstate.s0            
@@ -857,7 +857,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_VALTRAINVREF_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -913,7 +913,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_VALTRAINVREF_DONE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATATRAINCENTER1
             nextSubstate := MBTrainSubstate.s0            
@@ -939,7 +939,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATATRAINCENTER1_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -995,7 +995,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATATRAINCENTER1_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATATRAINVREF
             nextSubstate := MBTrainSubstate.s0            
@@ -1026,7 +1026,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATATRAINVREF_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -1082,7 +1082,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATATRAINVREF_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sRXDESKEW
             nextSubstate := MBTrainSubstate.s0            
@@ -1107,7 +1107,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_RXDESKEW_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             when(isCurrFreqGreaterThan32) {
               nextSubstate := MBTrainSubstate.s1
             }.otherwise {
@@ -1174,7 +1174,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_RXDESKEW_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATATRAINCENTER2
             nextSubstate := MBTrainSubstate.s0
@@ -1200,7 +1200,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATATRAINCENTER2_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -1256,7 +1256,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_DATATRAINCENTER2_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sLINKSPEED
             nextSubstate := MBTrainSubstate.s0            
@@ -1291,7 +1291,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_LINKSPEED_START_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           } 
         }
@@ -1374,7 +1374,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                            
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_LINKSPEED_EXIT_TO_SPEED_DEGRADE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.responderRdy && io.requesterRdy) {
             // State transition with Responder into SPEEDIDLE
             nextSubstate := MBTrainSubstate.s0
@@ -1397,7 +1397,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
               sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                            
               sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_LINKSPEED_EXIT_TO_PHY_RETRAIN_RESP
               
-              requesterRdy := sbMsgExchanger.io.done
+              requesterRdy := sbMsgExchanger.io.exchDone
               when(io.requesterRdy && io.responderRdy) {                
                 nextSubstate := MBTrainSubstate.s0
                 nextState := MBTrainState.sTOPHYRETRAIN
@@ -1420,7 +1420,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                            
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_LINKSPEED_DONE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done && !io.remoteErrorInLinkspeed
+          requesterRdy := sbMsgExchanger.io.exchDone && !io.remoteErrorInLinkspeed
 
           // Priority is given to going into the various repair states that Remote requests.
           when(io.remoteExitingToPhyretrain) {
@@ -1474,7 +1474,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_REPAIR_INIT_RESP
           
-          when(sbMsgExchanger.io.done) {          
+          when(sbMsgExchanger.io.exchDone) {          
             nextSubstate := MBTrainSubstate.s1
           } 
         }
@@ -1489,7 +1489,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                                    
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBTRAIN_REPAIR_APPLY_DEGRADE_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s2
           }
         }
@@ -1500,7 +1500,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_REPAIR_END_RESP, 
                                                     "PHY", "PHY", true)
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextSubstate := MBTrainSubstate.s0
             nextState := MBTrainState.sTXSELFCAL
@@ -1626,7 +1626,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := (currentState =/= nextState) || (substateReg =/= nextSubstate)
+  sbMsgExchanger.io.clear := (currentState =/= nextState) || (substateReg =/= nextSubstate)
   sbMsgExchanger.io.sbLaneIo.tx <> io.sbLaneIo.tx
   sbMsgExchanger.io.sbLaneIo.rx.valid := io.sbLaneIo.rx.valid
   sbMsgExchanger.io.sbLaneIo.rx.bits.data := io.sbLaneIo.rx.bits.data
@@ -1707,7 +1707,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
             sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_VALVREF_START_RESP, 
                                                       "PHY", "PHY", true)
 
-            when(sbMsgExchanger.io.done) {
+            when(sbMsgExchanger.io.exchDone) {
               nextSubstate := MBTrainSubstate.s1
             }   
           }       
@@ -1734,7 +1734,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_VALVREF_END_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATAVREF
             nextSubstate := MBTrainSubstate.s0            
@@ -1752,7 +1752,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATAVREF_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -1778,7 +1778,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATAVREF_END_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sSPEEDIDLE
             nextSubstate := MBTrainSubstate.s0            
@@ -1795,7 +1795,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
       sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived        
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_LINKSPEED_DONE_RESP, 
                                                 "PHY", "PHY", true)
-      responderRdy := sbMsgExchanger.io.done
+      responderRdy := sbMsgExchanger.io.exchDone
       when(io.requesterRdy && io.responderRdy) {
         nextState := MBTrainState.sTXSELFCAL           
       }
@@ -1807,7 +1807,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
       sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived        
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_TXSELFCAL_DONE_RESP, 
                                                 "PHY", "PHY", true)
-      responderRdy := sbMsgExchanger.io.done
+      responderRdy := sbMsgExchanger.io.exchDone
       when(io.requesterRdy && io.responderRdy) {
         nextState := MBTrainState.sRXCLKCAL           
       }    
@@ -1827,7 +1827,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_RXCLKCAL_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -1844,7 +1844,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_RXCLKCAL_DONE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sVALTRAINCENTER
             nextSubstate := MBTrainSubstate.s0            
@@ -1862,7 +1862,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_VALTRAINCENTER_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -1881,7 +1881,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_VALTRAINCENTER_DONE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sVALTRAINVREF
             nextSubstate := MBTrainSubstate.s0            
@@ -1899,7 +1899,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_VALTRAINVREF_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -1925,7 +1925,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_VALTRAINVREF_DONE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATATRAINCENTER1
             nextSubstate := MBTrainSubstate.s0            
@@ -1943,7 +1943,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATATRAINCENTER1_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -1962,7 +1962,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATATRAINCENTER1_END_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATATRAINVREF
             nextSubstate := MBTrainSubstate.s0            
@@ -1980,7 +1980,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATATRAINVREF_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -2006,7 +2006,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATATRAINVREF_END_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sRXDESKEW
             nextSubstate := MBTrainSubstate.s0            
@@ -2024,7 +2024,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_RXDESKEW_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -2050,7 +2050,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_RXDESKEW_END_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sDATATRAINCENTER2
             nextSubstate := MBTrainSubstate.s0            
@@ -2068,7 +2068,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATATRAINCENTER2_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }          
         }
@@ -2087,7 +2087,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_DATATRAINCENTER2_END_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBTrainState.sLINKSPEED
             nextSubstate := MBTrainSubstate.s0            
@@ -2111,7 +2111,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_LINKSPEED_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -2275,7 +2275,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_REPAIR_INIT_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBTrainSubstate.s1
           }
         }
@@ -2292,7 +2292,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_REPAIR_APPLY_DEGRADE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextSubstate := MBTrainSubstate.s2
           }                                                    
@@ -2304,7 +2304,7 @@ class MBTrainResponder(afeParams: AfeParams, sbParams: SidebandParams) extends M
           sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBTRAIN_REPAIR_END_RESP, 
                                                     "PHY", "PHY", true)
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextSubstate := MBTrainSubstate.s0
             nextState := MBTrainState.sTXSELFCAL

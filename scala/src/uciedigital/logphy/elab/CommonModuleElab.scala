@@ -11,10 +11,8 @@ object MainSidebandMessageExchanger extends App {
     args = Array("-td", "./generatedVerilog/logphy"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables"
+      "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",  
     ),
   )
 }
@@ -25,10 +23,8 @@ object MainUCIeLFSR extends App {
     args = Array("-td", "./generatedVerilog/logphy"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables"
+      "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",  
     ),
   )
 }
@@ -40,6 +36,7 @@ object MainParallelGaloisLFSR extends App {
     firtoolOpts = Array(
       "-O=debug",
       "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",  
     ),
   )
 }
@@ -50,10 +47,8 @@ object MainMainbandLaneController extends App {
     args = Array("-td", "./generatedVerilog/logphy"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
-      "--lowering-options=disallowLocalVariables"
+      "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",  
     ),
   )
 }
@@ -76,10 +71,8 @@ object MainPatternReader extends App {
     args = Array("-td", "./generatedVerilog/logphy/"),
     firtoolOpts = Array(
       "-O=debug",
-      "-g",
-      "--disable-all-randomization",
-      "--strip-debug-info",
       "--lowering-options=disallowLocalVariables",
+      "--lowering-options=locationInfoStyle=wrapInAtSquareBracket",  
     ),
   )
 }

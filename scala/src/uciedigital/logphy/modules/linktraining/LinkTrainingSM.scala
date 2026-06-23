@@ -702,16 +702,23 @@ class LinkTrainingSM(sbParams: SidebandParams, afeParams: AfeParams, retryW: Int
   // Default assignments
   io.patternReaderIo.req.valid := false.B
   io.patternReaderIo.req.bits := DontCare
-  io.patternReaderIo.functionalLanes := remoteTxFunctionalLanes
+  io.patternReaderIo.done := false.B
+  io.patternReaderIo.resp.ready := false.B
+  io.patternReaderIo.remoteFuncLanes := remoteTxFunctionalLanes
 
   patternReaderClients.foreach { case (isUsing, clientIo) =>
-    clientIo.resp := io.patternReaderIo.resp
+    // resp is broadcast to every client; only the active one drives the
+    // request, done strobe, and resp.ready back up to the reader.
+    clientIo.resp.valid := io.patternReaderIo.resp.valid
+    clientIo.resp.bits := io.patternReaderIo.resp.bits
     clientIo.req.ready := false.B
 
     when(isUsing) {
       io.patternReaderIo.req.valid := clientIo.req.valid
       io.patternReaderIo.req.bits := clientIo.req.bits
       clientIo.req.ready := io.patternReaderIo.req.ready
+      io.patternReaderIo.done := clientIo.done
+      io.patternReaderIo.resp.ready := clientIo.resp.ready
     }
   }
 
@@ -1323,4 +1330,3 @@ class LinkTrainingSM(sbParams: SidebandParams, afeParams: AfeParams, retryW: Int
     } 
   }
 }
-

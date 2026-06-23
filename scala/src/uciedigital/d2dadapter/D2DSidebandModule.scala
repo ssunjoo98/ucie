@@ -42,7 +42,6 @@ class D2DSidebandModule(val fdiParams: FdiParams, val sbParams: SidebandParams) 
     // channel's layer port rather than instantiating extra nodes or switches.
     val sidebandChannel = Module(new D2DSidebandChannel(
         sbMsgWidth = sbParams.sbNodeMsgWidth,
-        sbLinkWidth = sbParams.sbLinkWidth,
         fdiNcWidth = fdiParams.ncWidth,
         rdiNcWidth = fdiParams.ncWidth,
         numCredits = sbParams.maxCrd,

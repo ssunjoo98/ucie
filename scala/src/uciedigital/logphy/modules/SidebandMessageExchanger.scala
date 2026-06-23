@@ -16,21 +16,22 @@ class SidebandMessageExchanger(sbParams: SidebandParams) extends Module {
   val io = IO(new Bundle {
     // io.req.valid and io.rxRefBitPattern.valid is decoupled because 
     // Responder FSMs need to wait for a request before sending a response
-
     val req = Flipped(Valid(UInt(sbParams.sbNodeMsgWidth.W)))
     val rxRefBitPattern = Flipped(Valid(MixedVec(UInt(5.W), UInt(8.W), UInt(8.W))))
     val resp = Valid((UInt(sbParams.sbNodeMsgWidth.W)))
     val msgSent = Output(Bool())
     val msgReceived = Output(Bool())
+    val exchDone = Output(Bool())
+    val clear = Input(Bool())
     val sbLaneIo = new SidebandLaneIO(sbParams)
-    val done = Output(Bool())
-    val resetReg = Input(Bool())
-  })  
+  })
 
   val msgSent = RegInit(false.B)
   val msgReceived = RegInit(false.B)
 
-  when(io.resetReg) {
+  assert(!(io.clear && io.req.valid), "[SidebandMessageExchanger] Can't assert clear and req.valid together.")
+
+  when(io.clear) {
     msgSent := false.B
     msgReceived := false.B
   }
@@ -46,10 +47,8 @@ class SidebandMessageExchanger(sbParams: SidebandParams) extends Module {
     msgSent := true.B
   }
 
-  val refPattern = 
-        MixedVecInit(io.rxRefBitPattern.bits(0), io.rxRefBitPattern.bits(1), io.rxRefBitPattern.bits(2))
-  when(!msgReceived && io.sbLaneIo.rx.valid && io.rxRefBitPattern.valid && 
-       SBMsgCompare(io.sbLaneIo.rx.bits.data, refPattern)) {
+  when(!msgReceived && io.sbLaneIo.rx.valid && io.rxRefBitPattern.valid &&
+       SBMsgCompare(io.sbLaneIo.rx.bits.data, io.rxRefBitPattern.bits)) {
     io.sbLaneIo.rx.ready := true.B
     msgReceived := true.B
 
@@ -59,13 +58,12 @@ class SidebandMessageExchanger(sbParams: SidebandParams) extends Module {
     io.resp.valid := true.B  
   }    
 
-  // This module can be used to send or receive a single message by just driving the io.req.valid
-  // or io.rxRefBitPattern.valid HIGH, respectively. io.msgSent and io.MsgReceived is used to
-  // check the status.
+  // This module can be used to send or receive a single message by driving io.req.valid
+  // or io.rxRefBitPattern.valid HIGH, respectively. Use io.msgSent for send-only flows,
+  // io.msgReceived for receive-only flows, and io.exchDone for send-and-receive flows.
   io.msgSent := msgSent
   io.msgReceived := msgReceived
 
-  // Message has been exchanged
-  io.done := msgSent && msgReceived
+  // Message exchange has completed.
+  io.exchDone := msgSent && msgReceived
 }
-

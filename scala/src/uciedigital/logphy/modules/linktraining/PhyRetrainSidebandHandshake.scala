@@ -81,7 +81,7 @@ class PhyRetrainRequester(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := (currentState =/= nextState)  // TODO: might need a reset?
+  sbMsgExchanger.io.clear := (currentState =/= nextState)  // TODO: might need a reset?
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   // Requester ready logic -- used by responder
@@ -117,7 +117,7 @@ class PhyRetrainRequester(sbParams: SidebandParams) extends Module {
         remoteRetrainEncoding := sbMsgExchanger.io.resp.bits(74, 72)
       }
 
-      requesterRdy := sbMsgExchanger.io.done 
+      requesterRdy := sbMsgExchanger.io.exchDone 
       when(io.requesterRdy && io.responderRdy) {
         nextState := PhyRetrainState.sDONE
       }
@@ -157,7 +157,7 @@ class PhyRetrainResponder(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := (currentState =/= nextState)  // TODO: might need a reset?
+  sbMsgExchanger.io.clear := (currentState =/= nextState)  // TODO: might need a reset?
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   // Responder ready logic -- used by requester
@@ -193,7 +193,7 @@ class PhyRetrainResponder(sbParams: SidebandParams) extends Module {
                                                 msgInfo = Cat(0.U(12.W),
                                                               io.localRetrainEncoding.bits))
 
-      responderRdy := sbMsgExchanger.io.done 
+      responderRdy := sbMsgExchanger.io.exchDone 
       when(io.requesterRdy && io.responderRdy) {
         nextState := PhyRetrainState.sDONE
       }

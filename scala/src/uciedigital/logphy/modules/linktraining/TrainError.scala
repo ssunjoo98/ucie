@@ -36,7 +36,7 @@ class TrainErrorRequester(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := reset.asBool
+  sbMsgExchanger.io.clear := reset.asBool
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   // Message exchange
@@ -46,7 +46,7 @@ class TrainErrorRequester(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent                                               
   sbMsgExchanger.io.rxRefBitPattern.bits := SBM.TRAINERROR_ENTRY_RESP
 
-  io.done := sbMsgExchanger.io.done 
+  io.done := sbMsgExchanger.io.exchDone 
 }
 
 class TrainErrorResponder(sbParams: SidebandParams) extends Module {
@@ -76,7 +76,7 @@ class TrainErrorResponder(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := reset.asBool
+  sbMsgExchanger.io.clear := reset.asBool
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   io.remoteRequestingTrainError := sbMsgExchanger.io.msgReceived
@@ -88,7 +88,7 @@ class TrainErrorResponder(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := io.sendResp && sbMsgExchanger.io.msgReceived
   sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.TRAINERROR_ENTRY_RESP, 
                                             "PHY", "PHY", true)
-  io.done := sbMsgExchanger.io.done 
+  io.done := sbMsgExchanger.io.exchDone 
 }
 
 

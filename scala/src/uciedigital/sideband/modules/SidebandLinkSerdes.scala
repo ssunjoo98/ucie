@@ -98,7 +98,7 @@ class SidebandLinkSerializer(val sbLinkW: Int, val msgW: Int) extends Module {
     // state action
   switch(currentState) {
     is(SerializerState.sIdle) {
-      assert(outBitsCount === 0.U, "Output bit counter should start at 0")
+      assert(outBitsCount === 0.U,  "Output bit counter should start at 0")
       assert(waitBitsCount === 0.U, "Wait bit counter should start at 0")
 
       io.in.ready := true.B

@@ -110,7 +110,7 @@ class EnqueueArbiter(sbMsgWidth: Int, numQueues: Int) extends Module {
 
   // =======================================================================
   // Assertions
-  // =======================================================================
+  // =======================================================================  
   block(Verification) {
     block(Verification.Assert) {
       AssertProperty(

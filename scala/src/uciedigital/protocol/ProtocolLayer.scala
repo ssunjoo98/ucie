@@ -22,7 +22,6 @@ class ProtocolLayer(
   val mainbandRx = Module(new ProtocolMainbandRx(fdiParams.nBytes, params.rxQueueDepth))
   val sidebandChannel = Module(new ProtocolSidebandChannel(
     sbMsgWidth = sbParams.sbNodeMsgWidth,
-    sbLinkWidth = sbParams.sbLinkWidth,
     fdiNcWidth = fdiParams.ncWidth,
     numCredits = sbParams.maxCrd,
     queueDepths = SidebandPriorityQueueDepths()

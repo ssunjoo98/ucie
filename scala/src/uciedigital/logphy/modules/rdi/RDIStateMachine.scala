@@ -119,7 +119,7 @@ class RDIStateMachineRequester(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := substateReg === Substate.sIdle
+  sbMsgExchanger.io.clear := substateReg === Substate.sIdle
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   io.transitionDone := false.B
@@ -296,7 +296,7 @@ class RDIStateMachineRequester(sbParams: SidebandParams) extends Module {
       sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
       sbMsgExchanger.io.rxRefBitPattern.bits := rxPattern
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         io.transitionDone := true.B
         io.targetState := pendingTargetReg
         substateReg := Substate.sIdle
@@ -336,7 +336,7 @@ class RDIStateMachineResponder(sbParams: SidebandParams) extends Module {
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := substateReg === Substate.sIdle
+  sbMsgExchanger.io.clear := substateReg === Substate.sIdle
   sbMsgExchanger.io.sbLaneIo.tx <> io.sbLaneIo.tx
   sbMsgExchanger.io.sbLaneIo.rx.valid := io.sbLaneIo.rx.valid
   sbMsgExchanger.io.sbLaneIo.rx.bits.data := io.sbLaneIo.rx.bits.data

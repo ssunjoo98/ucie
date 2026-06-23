@@ -52,7 +52,7 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
   sbMsgExchanger.io.req.bits := 0.U
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
-  sbMsgExchanger.io.resetReg := currentState =/= nextState
+  sbMsgExchanger.io.clear := currentState =/= nextState
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   // Aggregate result and valid comparison result will be in rxInitPtTestLocalResults(0)
@@ -84,9 +84,9 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
   io.patternReaderIo.req.bits.comparisonMode := comparisonModeReg.asTypeOf(ComparisonMode()) 
   io.patternReaderIo.req.bits.errorThreshold := maxErrorThresholdReg        // from LTSM
   io.patternReaderIo.req.bits.doConsecutiveCount := false.B   // link ops never consecutive counts
-  io.patternReaderIo.req.bits.done := false.B
-  io.patternReaderIo.req.bits.clear := false.B
-  io.patternReaderIo.functionalLanes := "b011".U
+  io.patternReaderIo.done := false.B
+  io.patternReaderIo.resp.ready := false.B
+  io.patternReaderIo.remoteFuncLanes := "b011".U
   
   io.done := false.B
 
@@ -122,7 +122,7 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
         sbMsgExchanger.io.rxRefBitPattern.valid := true.B                                                     
         sbMsgExchanger.io.rxRefBitPattern.bits := SBM.START_RX_INIT_D2C_POINT_TEST_RESP    
 
-        when(sbMsgExchanger.io.done) {
+        when(sbMsgExchanger.io.exchDone) {
           nextState := 1.U
           inProgress := true.B
         }        
@@ -136,7 +136,7 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
       sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived 
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.LFSR_CLEAR_ERROR_RESP, "PHY", "PHY", true)
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         nextState := 2.U
       }
     }
@@ -146,7 +146,7 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.RX_INIT_D2C_TX_COUNT_DONE_REQ
       
-      io.patternReaderIo.req.bits.done := sbMsgExchanger.io.msgReceived // stop the PatternReader
+      io.patternReaderIo.done := sbMsgExchanger.io.msgReceived // stop the PatternReader
 
       sbMsgExchanger.io.req.valid := io.patternReaderIo.resp.valid
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.RX_INIT_D2C_TX_COUNT_DONE_RESP, 
@@ -158,8 +158,8 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
       }
       io.rxInitPtTestLocalResults.valid := resultValid                                                 
 
-      when(sbMsgExchanger.io.done) {
-        io.patternReaderIo.req.bits.clear := true.B
+      when(sbMsgExchanger.io.exchDone) {
+        io.patternReaderIo.resp.ready := true.B
         nextState := 3.U
       }
     }
@@ -170,7 +170,7 @@ class RxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams) ex
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.END_RX_INIT_D2C_POINT_TEST_RESP
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         nextState := 0.U
         io.done := true.B
         inProgress := false.B
@@ -220,7 +220,7 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
   sbMsgExchanger.io.req.bits := 0.U
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
-  sbMsgExchanger.io.resetReg := currentState =/= nextState
+  sbMsgExchanger.io.clear := currentState =/= nextState
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   assert(((!io.start) || ((io.patternType === PatternSelect.VALTRAIN) ||
@@ -253,7 +253,7 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.START_RX_INIT_D2C_POINT_TEST_RESP, 
                                                     "PHY", "PHY", true)                                                     
         }
-        when(sbMsgExchanger.io.done) {
+        when(sbMsgExchanger.io.exchDone) {
           nextState := 1.U
           inProgress := true.B
           clockPhaseSelectValidReg := false.B
@@ -266,7 +266,7 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.LFSR_CLEAR_ERROR_RESP
 
-      io.patternWriterIo.req.valid := sbMsgExchanger.io.done && io.patternWriterIo.req.ready
+      io.patternWriterIo.req.valid := sbMsgExchanger.io.exchDone && io.patternWriterIo.req.ready
 
       // Change states once transmission of selected pattern is done
       when(io.patternWriterIo.resp.complete) {
@@ -280,7 +280,7 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.RX_INIT_D2C_TX_COUNT_DONE_RESP
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         nextState := 3.U
       }
 
@@ -293,7 +293,7 @@ class RxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.END_RX_INIT_D2C_POINT_TEST_RESP,
                                                 "PHY", "PHY", true)
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         nextState := 0.U
         io.done := true.B
         inProgress := false.B        

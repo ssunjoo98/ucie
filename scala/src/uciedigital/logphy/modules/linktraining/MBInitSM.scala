@@ -282,7 +282,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := (currentState =/= nextState) || (substateReg =/= nextSubstate)
+  sbMsgExchanger.io.clear := (currentState =/= nextState) || (substateReg =/= nextSubstate)
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
   
   // mbLaneCtrlIo Defaults
@@ -479,7 +479,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
         io.phyParams.remotePhySettings.valid := sbMsgExchanger.io.resp.valid
 
         // io.phyParams.interoperableParamsFound is HIGH when resp params are what is expected
-        requesterRdy := sbMsgExchanger.io.done && io.phyParams.interoperableParamsFound
+        requesterRdy := sbMsgExchanger.io.exchDone && io.phyParams.interoperableParamsFound
 
         when(io.requesterRdy && io.responderRdy) {
           nextState := MBInitState.sCAL                    
@@ -494,7 +494,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
       sbMsgExchanger.io.rxRefBitPattern.valid := sbMsgExchanger.io.msgSent
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_CAL_DONE_RESP    
 
-      requesterRdy := sbMsgExchanger.io.done
+      requesterRdy := sbMsgExchanger.io.exchDone
 
       when(io.requesterRdy && io.responderRdy) {
         nextState := MBInitState.sREPAIRCLK                    
@@ -520,7 +520,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           
           // send 128 iterations of clock repair pattern (16 cycles clock followed by 8 cycles low)
           // on TCLKN_L, TCLKP_L, TTRK_L (not scrambled)
-          io.patternWriterIo.req.valid := sbMsgExchanger.io.done && io.patternWriterIo.req.ready 
+          io.patternWriterIo.req.valid := sbMsgExchanger.io.exchDone && io.patternWriterIo.req.ready 
           io.patternWriterIo.req.bits.patternType := PatternSelect.CLKREPAIR
 
           when(io.patternWriterIo.resp.complete) {
@@ -547,7 +547,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REPAIRCLK_DONE_RESP
           
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sREPAIRVAL
             nextSubstate := MBInitSubstate.s0
@@ -578,7 +578,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           // valid transmitter is enabled when sending, tri-stated otherwise
           io.mbLaneCtrlIo.txValidEn := true.B
 
-          io.patternWriterIo.req.valid := sbMsgExchanger.io.done && io.patternWriterIo.req.ready 
+          io.patternWriterIo.req.valid := sbMsgExchanger.io.exchDone && io.patternWriterIo.req.ready 
           io.patternWriterIo.req.bits.patternType := PatternSelect.VALTRAIN
 
           when(io.patternWriterIo.resp.complete) {
@@ -605,7 +605,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REPAIRVAL_DONE_RESP
           
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sREVERSALMB
             nextSubstate := MBInitSubstate.s0
@@ -636,7 +636,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REVERSALMB_INIT_RESP
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBInitSubstate.s1
           }          
         }
@@ -647,7 +647,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REVERSALMB_CLEAR_ERROR_RESP
 
-          io.patternWriterIo.req.valid := sbMsgExchanger.io.done && io.patternWriterIo.req.ready 
+          io.patternWriterIo.req.valid := sbMsgExchanger.io.exchDone && io.patternWriterIo.req.ready 
           io.patternWriterIo.req.bits.patternType := PatternSelect.PERLANEID
 
           when(io.patternWriterIo.resp.complete) {
@@ -681,7 +681,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B                                          
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REVERSALMB_DONE_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sREPAIRMB
             nextSubstate := MBInitSubstate.s0
@@ -710,7 +710,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B                                          
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REPAIRMB_START_RESP
           
-          when(sbMsgExchanger.io.done) {          
+          when(sbMsgExchanger.io.exchDone) {          
             nextSubstate := MBInitSubstate.s1
           }  
         }
@@ -760,7 +760,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           when(sbMsgExchanger.io.msgSent && allLanesFailed) { 
             errorDetectedWire := true.B
           }          
-          requesterRdy := sbMsgExchanger.io.done & !errorDetected
+          requesterRdy := sbMsgExchanger.io.exchDone & !errorDetected
 
           // Need to wait for responder to change width and send the response to Remote die
           // before moving on. (i.e. If Local die receives a response that means, Remote
@@ -784,7 +784,7 @@ class MBInitRequester(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REPAIRMB_END_RESP
 
-          requesterRdy := sbMsgExchanger.io.done
+          requesterRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sTOMBTRAIN
           }
@@ -867,7 +867,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
   sbMsgExchanger.io.req.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
-  sbMsgExchanger.io.resetReg := (currentState =/= nextState) || (substateReg =/= nextSubstate)
+  sbMsgExchanger.io.clear := (currentState =/= nextState) || (substateReg =/= nextSubstate)
   sbMsgExchanger.io.sbLaneIo.tx <> io.sbLaneIo.tx
   sbMsgExchanger.io.sbLaneIo.rx.valid := io.sbLaneIo.rx.valid
   sbMsgExchanger.io.sbLaneIo.rx.bits.data := io.sbLaneIo.rx.bits.data
@@ -881,13 +881,13 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
 
   // patternReaderIo defaults
   io.patternReaderIo.req.valid := false.B
-  io.patternReaderIo.req.bits.patternType := PatternSelect.CLKREPAIR
+  io.patternReaderIo.req.bits.patternType := PatternSelect.PERLANEID
   io.patternReaderIo.req.bits.comparisonMode := ComparisonMode.PERLANE
   io.patternReaderIo.req.bits.errorThreshold := 0.U
   io.patternReaderIo.req.bits.doConsecutiveCount := true.B // mbinit always consecutive counts
-  io.patternReaderIo.req.bits.done := false.B
-  io.patternReaderIo.req.bits.clear := false.B
-  io.patternReaderIo.functionalLanes := "b011".U
+  io.patternReaderIo.done := false.B
+  io.patternReaderIo.resp.ready := false.B
+  io.patternReaderIo.remoteFuncLanes := "b011".U
 
   // txPtTestRespInterfaceIo Defaults (defaults are used in MBINIT.RepairMB state)
   io.txPtTestRespInterfaceIo.start := false.B
@@ -978,7 +978,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
         // Top level will trigger an error if interoperable parameters are not found
         // Message won't send unless interoperable parameters are found.
 
-        responderRdy := sbMsgExchanger.io.done && io.phyParams.interoperableParamsFound
+        responderRdy := sbMsgExchanger.io.exchDone && io.phyParams.interoperableParamsFound
 
         when(io.requesterRdy && io.responderRdy) {
           nextState := MBInitState.sCAL                    
@@ -992,7 +992,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
       sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_CAL_DONE_RESP, "PHY", "PHY", true)
 
-      responderRdy := sbMsgExchanger.io.done
+      responderRdy := sbMsgExchanger.io.exchDone
       when(io.requesterRdy && io.responderRdy) {
         nextState := MBInitState.sREPAIRCLK                    
       }
@@ -1010,7 +1010,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           
           io.patternReaderIo.req.bits.patternType := PatternSelect.CLKREPAIR
 
-          when(sbMsgExchanger.io.done && io.patternReaderIo.req.ready) {
+          when(sbMsgExchanger.io.exchDone && io.patternReaderIo.req.ready) {
             io.patternReaderIo.req.valid := true.B
             nextSubstate := MBInitSubstate.s1
           }
@@ -1019,15 +1019,15 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REPAIRCLK_RESULT_REQ
 
-          io.patternReaderIo.req.bits.done := sbMsgExchanger.io.msgReceived
+          io.patternReaderIo.done := sbMsgExchanger.io.msgReceived
 
           sbMsgExchanger.io.req.valid := io.patternReaderIo.resp.valid
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRCLK_RESULT_RESP, 
                                                     "PHY", "PHY", true, 
                                                     msgInfo = mbRepairClkResult)
 
-          when(sbMsgExchanger.io.done) {
-            io.patternReaderIo.req.bits.clear := true.B
+          when(sbMsgExchanger.io.exchDone) {
+            io.patternReaderIo.resp.ready := true.B
             nextSubstate := MBInitSubstate.s2
           }
         }
@@ -1039,7 +1039,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRCLK_DONE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sREPAIRVAL
             nextSubstate := MBInitSubstate.s0
@@ -1060,7 +1060,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
 
           io.patternReaderIo.req.bits.patternType := PatternSelect.VALTRAIN
 
-          when(sbMsgExchanger.io.done && io.patternReaderIo.req.ready) {
+          when(sbMsgExchanger.io.exchDone && io.patternReaderIo.req.ready) {
             io.patternReaderIo.req.valid := true.B
             nextSubstate := MBInitSubstate.s1
           }
@@ -1069,14 +1069,14 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.valid := true.B
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REPAIRVAL_RESULT_REQ
 
-          io.patternReaderIo.req.bits.done := sbMsgExchanger.io.msgReceived
+          io.patternReaderIo.done := sbMsgExchanger.io.msgReceived
 
           sbMsgExchanger.io.req.valid := io.patternReaderIo.resp.valid
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRVAL_RESULT_RESP, 
                                                     "PHY", "PHY", true,
                                                     msgInfo = mbRepairValResult)
-          when(sbMsgExchanger.io.done) {
-            io.patternReaderIo.req.bits.clear := true.B
+          when(sbMsgExchanger.io.exchDone) {
+            io.patternReaderIo.resp.ready := true.B
             nextSubstate := MBInitSubstate.s2
           }
         }
@@ -1088,7 +1088,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRVAL_DONE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sREVERSALMB
             nextSubstate := MBInitSubstate.s0
@@ -1107,7 +1107,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REVERSALMB_INIT_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBInitSubstate.s1
           }
         }
@@ -1123,7 +1123,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REVERSALMB_CLEAR_ERROR_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done && io.patternReaderIo.req.ready) {
+          when(sbMsgExchanger.io.exchDone && io.patternReaderIo.req.ready) {
             gotLFSRClearReq := false.B
             nextSubstate := MBInitSubstate.s2
           }
@@ -1133,15 +1133,15 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.rxRefBitPattern.bits := SBM.MBINIT_REVERSALMB_RESULT_REQ
 
           // stop the pattern reader
-          io.patternReaderIo.req.bits.done := sbMsgExchanger.io.msgReceived
+          io.patternReaderIo.done := sbMsgExchanger.io.msgReceived
 
           sbMsgExchanger.io.req.valid := io.patternReaderIo.resp.valid
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REVERSALMB_RESULT_RESP, 
                                                     "PHY", "PHY", true,
                                                     data = mbReversalMbResult)
 
-          when(sbMsgExchanger.io.done) {
-            io.patternReaderIo.req.bits.clear := true.B
+          when(sbMsgExchanger.io.exchDone) {
+            io.patternReaderIo.resp.ready := true.B
             nextSubstate := MBInitSubstate.s3
           }                                                    
         }
@@ -1178,7 +1178,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRMB_START_RESP, 
                                                     "PHY", "PHY", true)
 
-          when(sbMsgExchanger.io.done) {
+          when(sbMsgExchanger.io.exchDone) {
             nextSubstate := MBInitSubstate.s1
           }
         }
@@ -1210,7 +1210,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRMB_APPLY_DEGRADE_RESP, 
                                                     "PHY", "PHY", true)
 
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
 
           when(io.requesterRdy && io.responderRdy) {
             currRemoteTxFunctionalLanes := newRemoteTxFunctionalLanes
@@ -1229,7 +1229,7 @@ class MBInitResponder(afeParams: AfeParams, sbParams: SidebandParams) extends Mo
           sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived
           sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.MBINIT_REPAIRMB_END_RESP, 
                                                     "PHY", "PHY", true)
-          responderRdy := sbMsgExchanger.io.done
+          responderRdy := sbMsgExchanger.io.exchDone
           when(io.requesterRdy && io.responderRdy) {
             nextState := MBInitState.sTOMBTRAIN
           }

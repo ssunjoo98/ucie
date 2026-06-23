@@ -54,7 +54,7 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
   sbMsgExchanger.io.req.bits := 0.U
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
-  sbMsgExchanger.io.resetReg := currentState =/= nextState
+  sbMsgExchanger.io.clear := currentState =/= nextState
   sbMsgExchanger.io.sbLaneIo.tx <> io.sbLaneIo.tx
   sbMsgExchanger.io.sbLaneIo.rx.valid := io.sbLaneIo.rx.valid
   sbMsgExchanger.io.sbLaneIo.rx.bits.data := io.sbLaneIo.rx.bits.data
@@ -98,9 +98,9 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
   io.patternReaderIo.req.bits.comparisonMode := comparisonModeReg       // from remote die
   io.patternReaderIo.req.bits.errorThreshold := maxErrorThresholdReg    // from remote die
   io.patternReaderIo.req.bits.doConsecutiveCount := false.B // link ops never consecutive counts
-  io.patternReaderIo.req.bits.done := false.B
-  io.patternReaderIo.req.bits.clear := false.B
-  io.patternReaderIo.functionalLanes := "b011".U
+  io.patternReaderIo.done := false.B
+  io.patternReaderIo.resp.ready := false.B
+  io.patternReaderIo.remoteFuncLanes := "b011".U
 
   val dataField = Wire(UInt(64.W))
   val msgInfoField = Wire(UInt(15.W))
@@ -142,7 +142,7 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
                                                   data = startReqData)
         sbMsgExchanger.io.rxRefBitPattern.valid := true.B
         sbMsgExchanger.io.rxRefBitPattern.bits := SBM.START_RX_INIT_D2C_EYE_SWEEP_RESP
-        when(sbMsgExchanger.io.done) {
+        when(sbMsgExchanger.io.exchDone) {
           nextState := 1.U
           inProgress := true.B
         }
@@ -159,7 +159,7 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
       sbMsgExchanger.io.req.valid := sbMsgExchanger.io.msgReceived           
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.LFSR_CLEAR_ERROR_RESP, "PHY", "PHY", true)        
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         gotLFSRClearReq := false.B
         nextState := 2.U
       }
@@ -170,7 +170,7 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.RX_INIT_D2C_RESULTS_REQ
 
-      io.patternReaderIo.req.bits.done := sbMsgExchanger.io.msgReceived // stop the PatternReader
+      io.patternReaderIo.done := sbMsgExchanger.io.msgReceived // stop the PatternReader
              
       sbMsgExchanger.io.req.valid := io.patternReaderIo.resp.valid
       sbMsgExchanger.io.req.bits := SBMsgCreate(SBM.RX_INIT_D2C_RESULTS_RESP,
@@ -183,8 +183,8 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
         resultsReg := rxInitEyeWidthSweepResults
       }      
 
-      when(sbMsgExchanger.io.done) {
-        io.patternReaderIo.req.bits.clear := true.B
+      when(sbMsgExchanger.io.exchDone) {
+        io.patternReaderIo.resp.ready := true.B
         nextState := 3.U
       }
     }
@@ -212,7 +212,7 @@ class RxD2CEyeWidthSweepRequester(afeParams: AfeParams, sbParams: SidebandParams
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.END_RX_INIT_D2C_EYE_SWEEP_RESP
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         nextState := 0.U
         io.done := true.B
         inProgress := false.B 
@@ -265,7 +265,7 @@ class RxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
   sbMsgExchanger.io.req.bits := 0.U
   sbMsgExchanger.io.rxRefBitPattern.valid := false.B
   sbMsgExchanger.io.rxRefBitPattern.bits := VecInit(0.U(5.W), 0.U(8.W), 0.U(8.W))
-  sbMsgExchanger.io.resetReg := currentState =/= nextState
+  sbMsgExchanger.io.clear := currentState =/= nextState
   sbMsgExchanger.io.sbLaneIo <> io.sbLaneIo
 
   // If start is HIGH, then patternType can either be VALTRAIN or LFSR
@@ -323,7 +323,7 @@ class RxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
                                                     "PHY", "PHY", true)
         }
 
-        when(sbMsgExchanger.io.done) {
+        when(sbMsgExchanger.io.exchDone) {
           nextState := 1.U
           inProgress := true.B
         }
@@ -335,7 +335,7 @@ class RxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.LFSR_CLEAR_ERROR_RESP
 
-      io.patternWriterIo.req.valid := sbMsgExchanger.io.done && io.patternWriterIo.req.ready     
+      io.patternWriterIo.req.valid := sbMsgExchanger.io.exchDone && io.patternWriterIo.req.ready     
 
       // Change states once transmission of selected pattern is done
       when(io.patternWriterIo.resp.complete) {
@@ -353,7 +353,7 @@ class RxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
         resultsReg := rxInitEyeWidthSweepRemoteResults
       }
     
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         io.phyTrainIo.waitingForCommand := true.B
         when(io.phyTrainIo.doneStepping) {  // PhyLaneTrainer controller signaled to finish test
           nextState := 3.U
@@ -386,7 +386,7 @@ class RxD2CEyeWidthSweepResponder(afeParams: AfeParams, sbParams: SidebandParams
       sbMsgExchanger.io.rxRefBitPattern.valid := true.B
       sbMsgExchanger.io.rxRefBitPattern.bits := SBM.END_RX_INIT_D2C_EYE_SWEEP_REQ
 
-      when(sbMsgExchanger.io.done) {
+      when(sbMsgExchanger.io.exchDone) {
         nextState := 0.U
         io.done := true.B
         inProgress := false.B
