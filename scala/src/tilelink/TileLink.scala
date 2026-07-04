@@ -666,7 +666,6 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
     }
     io.debug <> test.io.bumps
     test.io.debug <> phy.io.debug
-    test.io.sb <> phy.io.sb
     phy.io.clkRst.divResetb := test.io.divResetb
     test.io.regs <> regs.module.io.test
 
@@ -722,9 +721,19 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
         test.io.rx.bits := rxTestFifo.io.deq.bits
         test.io.rx.valid := rxTestFifo.io.deq.valid && !selUcie
         rxTestFifo.io.deq.ready := Mux(selUcie, digiToPhyRx.ready, test.io.rx.ready)
+
+        // Sideband: ucie mode uses ucieDigital; phytest/tl use PhyTest. Rx goes to both.
+        val digiSb = ucieDigital.io.phyFacingIo.sidebandLink
+        phy.io.sb.txClk  := Mux(selUcie, digiSb.out.fwClock.asClock, test.io.sb.txClk)
+        phy.io.sb.txData := Mux(selUcie, digiSb.out.bits.asBool, test.io.sb.txData)
+        test.io.sb.rxClk  := phy.io.sb.rxClk
+        test.io.sb.rxData := phy.io.sb.rxData
+        digiSb.in.bits    := phy.io.sb.rxData.asUInt
+        digiSb.in.fwClock := phy.io.sb.rxClk.asUInt
       case None =>
         txTestFifo.io.enq <> test.io.tx
         rxTestFifo.io.deq <> test.io.rx
+        test.io.sb <> phy.io.sb
     }
 
     withClockAndReset(childClock, childReset) {
