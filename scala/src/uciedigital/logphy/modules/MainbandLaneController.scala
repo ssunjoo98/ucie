@@ -58,6 +58,7 @@ class MainbandLaneController(afeParams: AfeParams, rdiParams: RdiParams) extends
  
   require(nLanes == 8 || nLanes == 16, "only 8- and 16-lane configurations are supported")
   require(serRatio % 8 == 0, "serRatio must be a multiple of 8")
+  require(Seq(64, 128, 256, 512).contains(nBytes), "Not a valid RDI nBytes")
  
   // Lane-map decoder
   def decodeLaneMap(code: UInt): UInt = {

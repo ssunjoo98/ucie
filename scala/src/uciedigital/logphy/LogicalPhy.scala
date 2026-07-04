@@ -335,7 +335,10 @@ class LogicalPhy(
   )
   patternReader.io.mbRxLaneIo := rawRxLaneBits
 
-  mainbandLaneController.io.rdi.tx.lpIrdy := io.rdi.lpIrdy && isActive
+  val rdiStateSts = rdiController.io.rdi.plStateSts
+  val canAcceptLpIrdy = rdiStateSts =/= RDIState.reset
+
+  mainbandLaneController.io.rdi.tx.lpIrdy := io.rdi.lpIrdy && isActive && canAcceptLpIrdy
   mainbandLaneController.io.rdi.tx.lpValid := io.rdi.lpValid && isActive
   mainbandLaneController.io.rdi.tx.lpData := io.rdi.lpData
   mainbandLaneController.io.ctrl.localTxFunctionalLanes := ltsm.io.localTxFunctionalLanes
@@ -465,14 +468,20 @@ class LogicalPhy(
     is("b011".U) { linkWidth := Mux(negotiatedBy8, LinkWidth.x8, LinkWidth.x16) }
   }
 
-  io.rdi.plTrdy := Mux(isActive, mainbandLaneController.io.rdi.tx.plTrdy, false.B)
+  // TODO: Allow plTrdy during the LinkError pl_stallreq/lp_stallack handshake
+  // after checking the exact condition in the RDI handshake and signals section.
+  io.rdi.plTrdy := Mux(
+    rdiStateSts === RDIState.active,
+    mainbandLaneController.io.rdi.tx.plTrdy,
+    false.B
+  )
   io.rdi.plValid := Mux(
     isActive && !suppressPlValidAfterError,
     mainbandLaneController.io.rdi.rx.plValid,
     false.B
   )
   io.rdi.plData := Mux(isActive, mainbandLaneController.io.rdi.rx.plData, 0.U)
-  io.rdi.plStateSts := rdiController.io.rdi.plStateSts
+  io.rdi.plStateSts := rdiStateSts
   io.rdi.plInbandPres := rdiController.io.rdi.plInbandPres
   io.rdi.plStallReq := rdiController.io.rdi.plStallReq
   io.rdi.plClkReq := rdiController.io.rdi.plClkReq

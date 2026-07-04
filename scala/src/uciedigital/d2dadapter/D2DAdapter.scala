@@ -116,7 +116,8 @@ class D2DAdapter(val fdiParams: FdiParams, val rdiParams: RdiParams,
     io.fdi.plValid := d2dMainband.io.fdi.plValid
     io.fdi.plData := d2dMainband.io.fdi.plData.asUInt
 
-    io.rdi.lpIrdy := d2dMainband.io.rdi.lpIrdy
+    val canPresentLpIrdy = io.rdi.plStateSts =/= RDIState.reset
+    io.rdi.lpIrdy := d2dMainband.io.rdi.lpIrdy && canPresentLpIrdy
     io.rdi.lpValid := d2dMainband.io.rdi.lpValid
     io.rdi.lpData := d2dMainband.io.rdi.lpData.asUInt
     d2dMainband.io.rdi.plTrdy := io.rdi.plTrdy

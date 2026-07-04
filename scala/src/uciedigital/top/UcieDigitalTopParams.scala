@@ -7,26 +7,21 @@ package edu.berkeley.cs.uciedigital.top
 import edu.berkeley.cs.uciedigital.interfaces._
 import edu.berkeley.cs.uciedigital.logphy.AfeParams
 import edu.berkeley.cs.uciedigital.protocol.ProtocolLayerParams
+import edu.berkeley.cs.uciedigital.regs.{PhyCapabilityRegParams, UcieRegParams}
 import edu.berkeley.cs.uciedigital.sideband.{SidebandPriorityQueueDepths, SidebandParams}
 
 case class ProtocolTopParams(
-  // Shared interface-shape parameter. Change only when the protocol-facing
-  // data width or config-credit width must change across the integration.
   fdi: FdiParams,
-  // Protocol-layer local behavior knobs.
   layer: ProtocolLayerParams = ProtocolLayerParams(),
 )
 
 case class AdapterTopParams(
-  // Keep these aligned with the protocol and logical PHY sides unless
-  // the wrapper itself is redesigned.
   fdi: FdiParams,
   rdi: RdiParams,
   sideband: SidebandParams = new SidebandParams(),
 )
 
 case class LogicalPhyTopParams(
-  // Shared interface-shape parameters for the PHY facing side.
   afe: AfeParams = AfeParams(),
   sideband: SidebandParams = new SidebandParams(),
   rdi: RdiParams,
@@ -39,6 +34,17 @@ case class UcieDigitalTopParams(
   protocol: ProtocolTopParams,
   adapter: AdapterTopParams,
   logPhy: LogicalPhyTopParams,
+  regs: UcieRegParams = UcieRegParams(
+    phyCapability = PhyCapabilityRegParams(
+      terminatedLink = false,
+      txEqSupport = false,
+      txVswingCode = 0x1,
+      rxClockModeSupport = 0x0,
+      rxClockPhaseSupport = 0x0
+    ),
+    numModules = 1,
+    diplomaticIntRouting = true
+  ),
 ) {
   def validate(): UcieDigitalTopParams = {
     require(
