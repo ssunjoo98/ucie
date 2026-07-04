@@ -724,7 +724,7 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
 
         // Sideband: ucie mode uses ucieDigital; phytest/tl use PhyTest. Rx goes to both.
         val digiSb = ucieDigital.io.phyFacingIo.sidebandLink
-        phy.io.sb.txClk  := Mux(selUcie, digiSb.out.fwClock.asClock, test.io.sb.txClk)
+        phy.io.sb.txClk  := Mux(selUcie, digiSb.out.fwClock.asBool.asClock, test.io.sb.txClk)
         phy.io.sb.txData := Mux(selUcie, digiSb.out.bits.asBool, test.io.sb.txData)
         test.io.sb.rxClk  := phy.io.sb.rxClk
         test.io.sb.rxData := phy.io.sb.rxData
