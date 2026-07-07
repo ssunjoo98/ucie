@@ -17,6 +17,7 @@ import freechips.rocketchip.regmapper.{RegField, RegWriteFn, RegFieldDesc}
 import freechips.rocketchip.tilelink._
 import edu.berkeley.cs.uciedigital.phy._
 import edu.berkeley.cs.uciedigital.top.{UcieDigitalTop, UcieDigitalTopParams}
+import edu.berkeley.cs.uciedigital.regs.{UcieRegBlock, UcieRegBlockIO, UcieRegParams, AdapterToRegs, PhyToRegs, LinkToRegs, MailboxSbResp, PhyToVendor}
 import edu.berkeley.cs.chippy._
 import freechips.rocketchip.diplomacy.{SimpleDevice, AddressSet}
 import org.chipsalliance.diplomacy._
@@ -32,7 +33,7 @@ import freechips.rocketchip.diplomacy.BundleBridgeSource
 import testchipip.soc.{ChipletLinkParams, ChipletLinkWrapperInstantiationLike, ChipletLinkWrapper, OffchipSubsystemParams, ChipletIO}
 
 case class UcieTLParams(
-    address: BigInt = 0x4000,
+    address: BigInt = 0x200000,
     bufferDepthPerLane: Int = 11,
     numLanes: Int = 16,
     bitCounterWidth: Int = 64,
@@ -42,7 +43,7 @@ case class UcieTLParams(
     queueParams: AsyncQueueParams = AsyncQueueParams(depth = 32),
     maxInflight: Int = 1,
     includeDefaultModels: Boolean = false,
-    ucieRegsBaseAddress: BigInt = 0x20000
+    ucieRegsBaseAddress: BigInt = 0x40000
 ) extends ChipletLinkParams
  with ChipletLinkWrapperInstantiationLike 
  {
@@ -130,7 +131,7 @@ class UcieTLRegsIO(
   val mainbandSel = Output(MainbandSel())
 }
 
-class UcieTLRegs(params: UcieTLParams, beatBytes: Int)(implicit
+class UcieTLRegs(params: UcieTLParams, beatBytes: Int, ucieRegParams: UcieRegParams)(implicit
     p: Parameters
 ) extends ClockSinkDomain(ClockSinkParameters()) {
   def toRegFieldRw[T <: Data](r: T, name: String): RegField = {
@@ -149,9 +150,10 @@ class UcieTLRegs(params: UcieTLParams, beatBytes: Int)(implicit
   def toRegFieldR[T <: Data](r: T, name: String): RegField = {
     RegField.r(r.getWidth, r.asUInt, RegFieldDesc(name, ""))
   }
+  val ucieTLRegionSize = 0x4000
   val device = new SimpleDevice("ucie_control", Seq("ucbbar,ucie"))
   val node = TLRegisterNode(
-    Seq(AddressSet(params.address, 16384 - 1)),
+    Seq(AddressSet(params.address, ucieTLRegionSize + ucieRegParams.allocation.regionSize - 1)),
     device,
     "reg/control",
     beatBytes = beatBytes
@@ -166,6 +168,8 @@ class UcieTLRegs(params: UcieTLParams, beatBytes: Int)(implicit
         params.bitCounterWidth
       )
     )
+    
+    val ucieBlockIo = IO(new UcieRegBlockIO(ucieRegParams))
 
     val regmap = withClockAndReset(clock, reset) {
       // TODO: Remove and add necessary registers
@@ -528,7 +532,13 @@ class UcieTLRegs(params: UcieTLParams, beatBytes: Int)(implicit
         }
       })
     }
-    node.regmap(regmap: _*)
+
+    // Spec-defined UCIe digital registers. Added after UCIe TL Regs.
+    val ucieRegmap = withClockAndReset(clock, reset) {
+      val (entries, _, _) = UcieRegBlock.build(ucieBlockIo, reset, ucieRegParams, ucieTLRegionSize)
+      entries
+    }
+    node.regmap((regmap ++ ucieRegmap): _*)
   }
 }
 
@@ -583,7 +593,16 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
   // Main digital clock node.
   val digitalClockNode = ClockSinkNode(Seq(ClockSinkParameters()))
   val ucieDigitalClockNode = ClockSourceNode(Seq(ClockSourceParameters()))
-  val regs = LazyModule(new UcieTLRegs(params, beatBytes))
+
+  val ucieRegParams = UcieDigitalTopParams.default().regs.copy(
+    baseAddress = params.ucieRegsBaseAddress,
+    numModules = 1,
+    includeRegNode = false,
+    includeInterruptNode = false
+  )
+  val ucieDigitalLazy: UcieDigitalTop =
+    LazyModule(new UcieDigitalTop(UcieDigitalTopParams.default().copy(regs = ucieRegParams)))
+  val regs = LazyModule(new UcieTLRegs(params, beatBytes, ucieRegParams))
 
   val device = new SimpleDevice("ucie", Seq("ucbbar,ucie"))
   // Manager node to send and acquire traffic to partner die
@@ -621,16 +640,6 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
   )
   val regNode = regs.node
   regs.clockNode := ucieDigitalClockNode
-
-  val ucieDigitalLazy: UcieDigitalTop = {
-    val baseParams = UcieDigitalTopParams.default()
-    val regParams = baseParams.regs.copy(
-      baseAddress = params.ucieRegsBaseAddress,
-      numModules = 1,
-      diplomaticIntRouting = false
-    )
-      LazyModule(new UcieDigitalTop(baseParams.copy(regs = regParams)))
-   }
 
   override lazy val module = new UcieTLImpl
   class UcieTLImpl extends LazyRawModuleImp(this) {
@@ -690,9 +699,10 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
     rxTestFifo.io.deq_reset := phy.io.clkRst.ucieRst
 
   
-    val ucieDigital = withClockAndReset(phy.io.clkRst.ucieClk, phy.io.clkRst.ucieRst) { 
-      ucieDigitalLazy.module 
+    val ucieDigital = withClockAndReset(phy.io.clkRst.ucieClk, phy.io.clkRst.ucieRst) {
+      ucieDigitalLazy.module
     }
+    ucieDigital.io.regBlockIo.foreach { rb => regs.module.ucieBlockIo <> rb }
     val selUcie = mainbandSel === MainbandSel.ucie
     // phyFacing TX: mux PhyTest vs ucieDigital into txTestFifo.enq (both ucieClk).
     val digiToPhyTx = ucieDigital.io.phyFacingIo.mainbandLink.tx
@@ -1016,14 +1026,6 @@ class UcieChipletLink(val params: UcieTLParams, val sys_params: OffchipSubsystem
   val client_node = ucie.clientNode
   val manager_node = ucie.managerNode
   val control_manager_node = Some(ucie.regNode)
-  // UcieRegTop MMIO node, interrupt source.
-  // TODO(for Ella): in testchipip OffchipRouter/CanHaveChipletRouting, expose the port wrappers and
-  // can make CanHaveUcieDigitalRegAndIntNodes and connect them to buses with that,
-  // or override a val here and connect them to buses in CanHaveChipletRouting instead.
-  //   ucie_reg_node -> cbus  (node := TLWidthWidget(cbus.beatBytes) := TLBuffer() := _)
-  //   ucie_int_node -> ibus  (ibus.fromAsync := _)   [after flipping diplomaticIntRouting to true]
-  val ucie_reg_node = ucie.ucieDigitalLazy.regNode
-  val ucie_int_node = ucie.ucieDigitalLazy.intNode
   val clock_node = Some(ucie.digitalClockNode)
   val top_IO = BundleBridgeSource(() => new UcieBumpsIO(params.numLanes))
   override lazy val module = new UcieChipletLinkImpl(this)
