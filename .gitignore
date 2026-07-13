@@ -82,3 +82,6 @@ out/
 
 chippy/
 generatedVerilog/
+
+# Docs
+docs_personal/
