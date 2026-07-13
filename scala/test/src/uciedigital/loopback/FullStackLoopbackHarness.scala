@@ -1,4 +1,4 @@
-package edu.berkeley.cs.uciedigital.integration
+package edu.berkeley.cs.uciedigital.loopback
 
 import chisel3._
 import edu.berkeley.cs.uciedigital.d2dadapter.D2DAdapter
@@ -70,8 +70,8 @@ class FullStackLoopbackHarness(
     afeParams = afeParams,
     sbParams = sbParams,
     rdiParams = rdiParams,
-    ltsmTimeoutCycles = ltsmTimeoutCycles,
-    phyTrainerAutoRespond = true,
+    // WIP: ltsmTimeoutCycles / phyTrainerAutoRespond were params on the
+    // (reverted) instrumented LogicalPhy; restore when observability hooks land.
   )))
   val adapters = Seq.fill(2)(Module(new D2DAdapter(fdiParams, rdiParams, sbParams)))
 

@@ -1,4 +1,6 @@
-package edu.berkeley.cs.uciedigital.logphy
+package edu.berkeley.cs.uciedigital.loopback
+
+import edu.berkeley.cs.uciedigital.logphy._
 
 import chisel3._
 import edu.berkeley.cs.uciedigital.interfaces._
@@ -76,8 +78,8 @@ class LogPhyLoopbackHarness(
     afeParams = afeParams,
     sbParams = sbParams,
     rdiParams = rdiParams,
-    ltsmTimeoutCycles = ltsmTimeoutCycles,
-    phyTrainerAutoRespond = phyTrainerAutoRespond,
+    // WIP: ltsmTimeoutCycles / phyTrainerAutoRespond belonged to the
+    // (reverted) instrumented LogicalPhy; restore when hooks land upstream.
   )))
 
   for (i <- 0 until 2) {

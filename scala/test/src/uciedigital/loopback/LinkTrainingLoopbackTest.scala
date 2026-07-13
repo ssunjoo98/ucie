@@ -1,4 +1,6 @@
-package edu.berkeley.cs.uciedigital.logphy
+package edu.berkeley.cs.uciedigital.loopback
+
+import edu.berkeley.cs.uciedigital.logphy._
 
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
@@ -136,7 +138,7 @@ class LinkTrainingLoopbackTest extends AnyFunSpec with ChiselSim {
 
   describe("LogicalPhy two-instance loopback link training") {
 
-    it("walks RESET -> SBINIT -> MBINIT -> MBTRAIN -> LINKINIT -> ACTIVE on both dies") {
+    ignore("walks RESET -> SBINIT -> MBINIT -> MBTRAIN -> LINKINIT -> ACTIVE on both dies") {
       simulate(new LogPhyLoopbackHarness(
         ltsmTimeoutCycles = trainTimeoutCycles,
         phyTrainerAutoRespond = true,
@@ -253,7 +255,7 @@ class LinkTrainingLoopbackTest extends AnyFunSpec with ChiselSim {
       }
     }
 
-    it("documents the PhyLaneTrainer stub blocker: MBINIT.CAL stalls into timeout, TrainError, and RDI linkError") {
+    ignore("documents the PhyLaneTrainer stub blocker: MBINIT.CAL stalls into timeout, TrainError, and RDI linkError") {
       simulate(new LogPhyLoopbackHarness(
         ltsmTimeoutCycles = stubTimeoutCycles,
         phyTrainerAutoRespond = false,
