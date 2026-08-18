@@ -41,6 +41,11 @@ class PatternReader(afeParams: AfeParams) extends Module {
       val pattern = Input(Vec(afeParams.mbLanes, UInt(afeParams.mbSerializerRatio.W)))
     }
     val mbRxLaneIo = Input(new MainbandLanes(afeParams.mbLanes, afeParams.mbSerializerRatio))
+    // High on the cycles that actually carry a received word. Detection advances
+    // per WORD, not per clock, so the first delivered word is phase 0 of the
+    // reference and the detector self-aligns. Tie high for a source that streams a
+    // bare word every cycle with no valid qualifier.
+    val mbRxValid = Input(Bool())
   })
 
   // ==========================================================================
@@ -225,7 +230,20 @@ class PatternReader(afeParams: AfeParams) extends Module {
 
   // Count only while detecting.
   // Result is stable until the requester accepts it via resp.fire.
-  val counterEn = state === sDetect
+  // Gated on mbRxValid, not just on the state.
+  //
+  // The phase counters below reconstruct the reference word for the current cycle and
+  // used to free-run from the cycle the request fired. But the reader is started by
+  // the RESPONDER finishing its INIT exchange while the pattern is sent by the remote
+  // die's REQUESTER finishing its own -- different events, hundreds of cycles apart.
+  // The reader spent that gap comparing the reference against an idle (zeroed) bus and
+  // advancing its phase, so by the time real words arrived the phase was off by an
+  // arbitrary amount, every iteration came back dirty, and MBINIT.REPAIRCLK reported
+  // failure.
+  //
+  // Counting per received WORD instead of per CLOCK makes the first delivered word
+  // phase 0 by construction, so the detector aligns itself with no acquisition logic.
+  val counterEn = state === sDetect && io.mbRxValid
 
   io.interfaceIo.req.ready := state === sIdle
   io.interfaceIo.resp.valid := state === sResult
