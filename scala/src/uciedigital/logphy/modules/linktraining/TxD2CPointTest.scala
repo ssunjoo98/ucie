@@ -224,7 +224,7 @@ class TxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams) ex
   io.patternReaderIo.remoteFuncLanes := "b011".U
  
   val dataField = Wire(UInt(64.W))
-  val msgInfoField = Wire(UInt(15.W))
+  val msgInfoField = Wire(UInt(16.W))
   // Note: Can register the response if combinational path is long, then next cycle
   // drive the sbMsgExchanger.io.req.valid HIGH
   dataField := Cat(0.U((64 - afeParams.mbLanes).W), 
