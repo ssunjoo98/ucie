@@ -136,10 +136,10 @@ class D2DMainbandModule(
     dataBuffRcvReg := io.rdi.plData
   }
 
-  dataBuffRcvFillReg := dataBuffRcvFillReg
-  when(rxBeatAcceptedFromRdi) {
-    dataBuffRcvFillReg := true.B
-  }.elsewhen(!io.state.rxActiveReq) {
-    dataBuffRcvFillReg := false.B
-  }
+  // pl_valid marks the cycle a beat is presented, not "a beat has been received
+  // at some point": dataBuffRcvReg holds the beat for exactly the cycle after
+  // capture, and the FDI receive path has no backpressure, so a level here makes
+  // the protocol layer enqueue the same beat every cycle it stays high. Clearing
+  // on !rxActiveReq never fires in ACTIVE (AdapterSM.scala:422-427).
+  dataBuffRcvFillReg := rxBeatAcceptedFromRdi
 }
