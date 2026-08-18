@@ -55,6 +55,21 @@ class ProtocolStateController() extends Module {
     negotiatedValidReg := true.B
   }
 
+  // The adapter EDGE-detects nop->active on lp_state_req, and only while it sits
+  // in LinkInitState.FDI_BRINGUP (AdapterSM.scala:281-286); every other link-init
+  // sub-state force-clears the latch (AdapterSM.scala:226). So the request must
+  // be presented INSIDE that window and nowhere else. pl_inband_pres marks it
+  // exactly: the adapter raises it only in FDI_BRINGUP/INIT_DONE
+  // (AdapterSM.scala:112,:124, registered at :441).
+  val fdiInBringupWindow = (io.fdi.plStateSts === FDIState.reset) && io.fdi.plInbandPres
+  // The teardown states are the one other place the ADAPTER reads the active
+  // LEVEL rather than an edge: escaping linkError/disabled/linkReset back to
+  // reset requires it (AdapterSM.scala:522-523,:530-531,:540-541).
+  val fdiNeedsActiveToRecover =
+    (io.fdi.plStateSts === FDIState.linkError) ||
+    (io.fdi.plStateSts === FDIState.disabled) ||
+    (io.fdi.plStateSts === FDIState.linkReset)
+
   val requestedState = WireDefault(FDIStateReq.nop)
   when(io.ctrl.requestDisable) {
     requestedState := FDIStateReq.disabled
@@ -62,6 +77,11 @@ class ProtocolStateController() extends Module {
     requestedState := FDIStateReq.linkReset
   }.elsewhen(io.ctrl.requestRetrain) {
     requestedState := FDIStateReq.retrain
+  }.elsewhen(io.ctrl.requestActive && (fdiInBringupWindow || fdiNeedsActiveToRecover)) {
+    // LOWEST priority on purpose: a held requestActive must never mask a
+    // teardown request. Dropping back to nop once the FDI leaves reset re-arms
+    // the edge for the next bring-up, so a link that came down can come back up.
+    requestedState := FDIStateReq.active
   }
 
   when(!io.fdi.plStallReq) {
