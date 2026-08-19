@@ -181,8 +181,8 @@ object DieFlag {
   * WHAT IS FAKED. Three things, all of them deliberate:
   *   - the analog macro. LogicalPhy consumes exactly two bits from it (pllLock,
   *     clocksUngatedAndStable, Bundles.scala:77-80) and both are tied high.
-  *     There is no hardware source for either in this design,
-  *     so tying them high is the only option and it is also what makes
+  *     There is no hardware source for either in this design (BRINGUP_SEQUENCE
+  *     D-19), so tying them high is the only option and it is also what makes
   *     the RDI wake responder able to leave sUNGATE at all
   *     (RDIWakeHandshakeResponder.scala:46-52).
   *   - the register block. UcieDigitalTop instantiates one, but it drives
@@ -211,10 +211,10 @@ object DieFlag {
   *
   * Index convention: die 0 and die 1; die i's RX comes from die 1-i.
   *
-  * DEPENDENCY: `proto.ctrl.requestActive` is the ProtocolLayerCtrlIO /
-  * ProtocolStateController control input added on this branch; on a tree
-  * without that patch this harness does not elaborate (see the U4 rung's
-  * blocker string in UcieDigitalStagedBringupTest.scala).
+  * DEPENDENCY: `proto.ctrl.requestActive` does not exist in the current tree.
+  * This harness does not elaborate until the ProtocolLayerCtrlIO /
+  * ProtocolStateController patch lands (see the U4 rung's blocker string in
+  * UcieDigitalStagedBringupTest.scala).
   */
 class UcieDigitalLoopbackHarness(
   val protocolParams: ProtocolLayerParams = ProtocolLayerParams(),
@@ -242,8 +242,8 @@ class UcieDigitalLoopbackHarness(
   val io = IO(new Bundle {
     // ---- Per-die drive (poked by the testbench) -----------------------------
     val swStartLinkTraining = Input(Vec(2, Bool()))
-    /** Testbench-driven like LogPhyLoopbackHarness.scala:139, not tied true as
-      * an earlier full-stack harness did, so mid-training power loss stays
+    /** Testbench-driven like LogPhyLoopbackHarness.scala:139, not tied true like
+      * FullStackLoopbackHarness.scala:98, so mid-training power loss stays
       * characterizable. The LTSM samples it only on the RESET exit arc. */
     val pwrGood = Input(Vec(2, Bool()))
     /** Software requests into ProtocolLayer.io.ctrl, packed; see ProtoCtrl. */
@@ -316,8 +316,8 @@ class UcieDigitalLoopbackHarness(
 
     // ========================================================================
     // The stack, wired as UcieDigitalTop.scala:89-90 does it. These two lines
-    // replace all fourteen FDI drive statements an earlier full-stack harness
-    // carried as tie-offs: if any of them survived
+    // replace all fourteen FDI drive statements the old FullStackLoopbackHarness
+    // carried (FullStackLoopbackHarness.scala:127-141): if any of them survived
     // alongside a real ProtocolLayer, Chisel last-connect would silently make
     // the tie-off win and the protocol layer would be a decoration.
     // ========================================================================

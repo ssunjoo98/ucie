@@ -381,7 +381,7 @@ class LinkTrainingSM(sbParams: SidebandParams, afeParams: AfeParams, retryW: Int
   val mbTrainSM = withReset(subFsmModuleReset) { Module(new MBTrainSM(afeParams, sbParams)) }
 
   // The parameters are known from outside (DVSEC, or elaboration) see where they come from
-  mbTrainSM.io.negotiatedMaxDataRate := negotiatedMaxDataRate(2,0).asTypeOf(SpeedMode())
+  mbTrainSM.io.negotiatedMaxDataRate := SpeedMode.safe(negotiatedMaxDataRate(2, 0))._1
   mbTrainSM.io.pllLock := io.phyCtrlIo.pllLock
   mbTrainSM.io.interpretBy8Lane := negotiatedUcieSx8
   mbTrainSM.io.maxErrorThresholdPerLane := io.maxErrorThresholdPerLane

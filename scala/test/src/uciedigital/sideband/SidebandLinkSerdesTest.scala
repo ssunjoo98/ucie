@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.sideband
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.util._
 
@@ -10,7 +11,7 @@ import edu.berkeley.cs.uciedigital.simutils.VerilatorCoverage
 import org.scalatest.funspec.AnyFunSpec
 
 
-class SidebandLinkSerdesTest extends AnyFunSpec with ChiselSim with VerilatorCoverage {
+class SidebandLinkSerdesTest extends AnyFunSpec with ChiselSim with UcieSimPrefs with VerilatorCoverage {
 
   val sbParams = new SidebandParams()
   val msgW = sbParams.sbNodeMsgWidth

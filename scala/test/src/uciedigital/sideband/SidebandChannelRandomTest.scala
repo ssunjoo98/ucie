@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.sideband
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.layer.block
 import chisel3.layers.Verification
@@ -36,7 +37,7 @@ import scala.util.Random
     D2D: all layer/FDI/RDI directions, invalid routes, parity drops, backpressure, opcodes.
     LogPHY: layer/RDI/link routes, link wait/widths, freeze, timeout, parity, opcodes.
 */
-class SidebandChannelRandomTest extends AnyFunSpec with ChiselSim with Cli.Scale with VerilatorCoverage {
+class SidebandChannelRandomTest extends AnyFunSpec with ChiselSim with UcieSimPrefs with Cli.Scale with VerilatorCoverage {
   // ============================================================================
   // Config
   // ============================================================================

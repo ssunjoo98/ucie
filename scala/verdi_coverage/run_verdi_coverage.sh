@@ -8,6 +8,8 @@
 #   ./run_verdi_coverage.sh edu.berkeley.cs.uciedigital.logphy.UcieLFSRTest ...
 #                                                                      # specific suites
 #   ./run_verdi_coverage.sh --merge-only                               # just re-merge existing vdbs
+#   ./run_verdi_coverage.sh --make-shim                                # build the VCS C++17 shim (once per host)
+#   ./run_verdi_coverage.sh --check                                    # verify the toolchain in seconds, before a long run
 #
 # Per-test coverage DBs land in build/chiselsim/<Test>/<scenario>/workdir-vcs/simulation.vdb
 # (fixed by ChiselSim). The merge stage produces, in this directory:
@@ -41,13 +43,139 @@ if [ "${1:-}" = "--clean" ]; then
          "$COV_DIR/modules_summary.txt" "$COV_DIR/area_summary.txt"
 fi
 
-# svsim invokes $VCS_HOME/bin/vcs directly (PATH is rebuilt by mill's test fork,
-# so PATH tricks don't survive). The shim VCS_HOME interposes a vcs wrapper that
-# restores the real VCS_HOME and puts a C++17-capable g++ (conda gcc-15, -no-pie)
-# ahead of system g++ 4.8 for VCS csrc builds. Machine-specific; skipped elsewhere.
-if [ -d /home/sangwoo/tools/vcs-home-shim ]; then
-  export VCS_HOME=/home/sangwoo/tools/vcs-home-shim
+# --- compiler for the VCS csrc build ------------------------------------------
+#
+# csrc/Makefile drives BOTH halves of the build with one compiler (VCS_CC=gcc):
+# svsim's generated C++ harness (generated-sources/*.cpp, needs C++17) and VCS's
+# own generated legacy C (rmapats.c). That pins the usable compiler from both
+# ends -- g++ 4.8 is too old for the harness, and gcc >= 14 rejects rmapats.c,
+# which calls vcs_simpSetEBlkEvtID() with no declaration (an error since GCC 14,
+# and csrc's own -w does not downgrade it). The gcc wrapper below re-adds
+# -Wno-implicit-function-declaration so a modern compiler covers both.
+#
+# Setting PATH here does not reach VCS: svsim invokes $VCS_HOME/bin/vcs directly
+# and mill's test fork rebuilds the environment. VCS_HOME is the one variable
+# svsim is guaranteed to read, so the hook goes there -- a shim VCS_HOME of
+# symlinks to the real one whose bin/vcs restores the real VCS_HOME and puts the
+# wrappers on PATH. Build it with `--make-shim`; it lands under $UCIE_VCS_SHIM
+# (default $HOME/.cache/ucie/vcs-home-shim) and is picked up automatically.
+VCS_SHIM="${UCIE_VCS_SHIM:-$HOME/.cache/ucie/vcs-home-shim}"
+
+cxx_is_cxx17() {  # $1 = compiler
+  command -v "$1" >/dev/null 2>&1 || return 1
+  printf '#include <string_view>\nint main(){return 0;}\n' > /tmp/.ucie_cxx17_$$.cc
+  "$1" -std=c++17 -c /tmp/.ucie_cxx17_$$.cc -o /tmp/.ucie_cxx17_$$.o >/dev/null 2>&1
+  local rc=$?
+  rm -f /tmp/.ucie_cxx17_$$.cc /tmp/.ucie_cxx17_$$.o
+  return $rc
+}
+
+find_cxx17() {  # prints the first C++17-capable g++ found, or nothing
+  local c
+  # $CONDA_PREFIX is the ACTIVE env, which is often the base rather than the one
+  # holding the toolchain, so the envs are globbed too.
+  for c in "${UCIE_CXX:-}" \
+           "${CONDA_PREFIX:-}/bin/g++" \
+           "${CONDA_PREFIX:-}"/envs/*/bin/g++ \
+           "$HOME"/miniforge3/envs/*/bin/g++ \
+           "$HOME"/miniconda3/envs/*/bin/g++ \
+           g++ g++-15 g++-13 g++-11 g++-9; do
+    [ -n "$c" ] || continue
+    if cxx_is_cxx17 "$c"; then command -v "$c" || echo "$c"; return 0; fi
+  done
+  return 1
+}
+
+make_shim() {
+  local real="${VCS_HOME:?VCS_HOME must point at a real VCS install}"
+  local cxx; cxx="$(find_cxx17)" || {
+    echo "ERROR: no C++17-capable g++ found. Set UCIE_CXX=/path/to/g++ and retry." >&2
+    exit 1
+  }
+  local ccdir ccroot; ccdir="$(dirname "$cxx")"; ccroot="$(dirname "$ccdir")"
+  echo "Building VCS shim at $VCS_SHIM"
+  echo "  real VCS_HOME : $real"
+  echo "  compiler      : $cxx"
+  rm -rf "$VCS_SHIM"; mkdir -p "$VCS_SHIM/bin" "$VCS_SHIM/cc"
+  local e b
+  for e in "$real"/*; do b="$(basename "$e")"; [ "$b" = bin ] && continue; ln -sfn "$e" "$VCS_SHIM/$b"; done
+  for e in "$real"/bin/*; do b="$(basename "$e")"; [ "$b" = vcs ] && continue; ln -sfn "$e" "$VCS_SHIM/bin/$b"; done
+  # csrc calls plain `gcc` for both the C++ harness and rmapats.c, so the flag
+  # that makes the legacy C acceptable is added here rather than in csrc/Makefile
+  # (which VCS regenerates on every compile).
+  cat > "$VCS_SHIM/cc/gcc" <<EOF
+#!/bin/bash
+# GCC 14 turned these long-standing C warnings into errors; VCS's generated C
+# still relies on all of them. Only rmapats.c's implicit declaration is known to
+# bite here, but the rest cost nothing and cover other VCS versions. They are C
+# only, so C++ sources are passed through untouched. An older gcc silently
+# ignores the -Wno-* names it does not know.
+for a in "\$@"; do case "\$a" in *.cpp|*.cc|*.cxx|*.C) exec "$ccdir/gcc" "\$@";; esac; done
+exec "$ccdir/gcc" -Wno-implicit-function-declaration -Wno-implicit-int \\
+     -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-return-mismatch "\$@"
+EOF
+  chmod +x "$VCS_SHIM/cc/gcc"
+  ln -sfn "$cxx" "$VCS_SHIM/cc/g++"          # linker only (csrc LD=g++)
+  cat > "$VCS_SHIM/bin/vcs" <<EOF
+#!/bin/bash
+# Generated by run_verdi_coverage.sh --make-shim. Restores the real VCS_HOME and
+# puts the wrapped compilers ahead of the system ones for the csrc build.
+export VCS_HOME="$real"
+export PATH="$VCS_SHIM/cc:$ccdir:\$PATH"
+# VCS prepends \$LDFLAGS to its link line, ahead of -lsnpsmalloc and friends, so
+# a conda env's activation LDFLAGS reaches the simv link. Its --as-needed then
+# drops libsnpsmalloc.so from DT_NEEDED -- nothing in simv references it, only
+# libvcsucli.so does -- and simv dies at startup with
+#   symbol lookup error: libvcsucli.so: undefined symbol: snpsReallocFunc
+# --gc-sections and -z now are hostile here for the same reason. Keep only the
+# rpath, which is what lets simv find the compiler's own libstdc++ at runtime.
+export LDFLAGS="-Wl,--no-as-needed -Wl,-rpath,$ccroot/lib -L$ccroot/lib"
+unset CFLAGS CXXFLAGS CPPFLAGS DEBUG_CFLAGS DEBUG_CXXFLAGS
+exec "\$VCS_HOME/bin/vcs" "\$@"
+EOF
+  chmod +x "$VCS_SHIM/bin/vcs"
+  echo "Done. Re-run without --make-shim."
+}
+
+if [ "${1:-}" = "--make-shim" ]; then make_shim; exit 0; fi
+
+if [ -d "$VCS_SHIM" ]; then
+  export VCS_HOME="$VCS_SHIM"
+elif ! cxx_is_cxx17 "${UCIE_CXX:-g++}"; then
+  echo "WARNING: the default g++ cannot compile C++17, so the svsim harness will" >&2
+  echo "         fail to build under VCS. Run: $0 --make-shim" >&2
 fi
+
+# Toolchain smoke test. Every environment failure seen on this host shows up in
+# a trivial VCS build too, so `--check` reproduces all of them in seconds
+# instead of after a multi-minute mill run:
+#   compile  -- the C++17 probe stands in for svsim's generated harness
+#   compile  -- VCS's own generated rmapats.c, which modern gcc rejects
+#   link+run -- simv resolving snpsReallocFunc out of libsnpsmalloc.so
+run_check() {
+  local d; d="$(mktemp -d)" || return 1
+  printf 'module top;\n  initial begin $display("UCIE_CHECK_OK"); $finish; end\nendmodule\n' > "$d/top.sv"
+  printf '#include <string_view>\nextern "C" int ucie_probe(){ std::string_view s="ok"; return (int)s.size(); }\n' > "$d/probe.cpp"
+  echo "Toolchain check (VCS_HOME=$VCS_HOME)"
+  if ! ( cd "$d" && "$VCS_HOME/bin/vcs" -full64 -sverilog -licqueue -o simv top.sv probe.cpp ) > "$d/vcs.log" 2>&1; then
+    echo "FAIL: compile/link. Last lines of $d/vcs.log:" >&2
+    grep -iE "error|undefined" "$d/vcs.log" | tail -5 >&2
+    echo "Hint: '-std=c++17' unrecognized -> compiler too old; 'implicit declaration'" >&2
+    echo "      in rmapats.c -> gcc >= 14 without the wrapper. Run: $0 --make-shim" >&2
+    return 1
+  fi
+  if ! ( cd "$d" && ./simv ) > "$d/run.log" 2>&1 || ! grep -q UCIE_CHECK_OK "$d/run.log"; then
+    echo "FAIL: simv built but did not run. Last lines of $d/run.log:" >&2
+    tail -5 "$d/run.log" >&2
+    echo "Hint: 'undefined symbol' -> a linker flag (--as-needed/--gc-sections) from" >&2
+    echo "      the active conda env reached the link. Run: $0 --make-shim" >&2
+    return 1
+  fi
+  echo "PASS: C++17 harness, VCS legacy C, and simv link+startup all work."
+  rm -rf "$d"
+}
+
+if [ "${1:-}" = "--check" ]; then run_check; exit $?; fi
 
 if [ "${1:-}" != "--merge-only" ]; then
   # --no-daemon: the mill daemon caches its startup environment, so

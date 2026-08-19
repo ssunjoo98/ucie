@@ -90,9 +90,10 @@ import edu.berkeley.cs.uciedigital.interfaces._
         `-z "S4"` in isolation still runs S4 for real (nothing below it ran, so
         there is nothing to be blocked by).
 
-  Ladder status MEASURED 2026-08-13, after the training-chain fixes carried on
-  this branch. All nine rungs pass. Timings are cycles spent in that rung's own
-  climb, on top of the cold start every rung pays.
+  Ladder status MEASURED 2026-08-13, after seventeen RTL defects were fixed
+  (see docs_personal/FIX_LOG.md). S0..S7 all pass; S8 was added the same day and
+  has not been measured yet. Timings are cycles spent in that rung's own climb,
+  on top of the cold start every rung pays.
 
     S0  PASS       ASYMMETRIC start: die 0 triggered, die 1 woke in 167 cycles.
     S1  PASS       SBINIT completes -> sMBINIT; 1920 cycles.
@@ -105,9 +106,7 @@ import edu.berkeley.cs.uciedigital.interfaces._
     S6  PASS       RDI reaches active with no lpStateReq poke.
     S7  PASS       both dies in sACTIVE, no sideband fault latched anywhere in
                    training, link held over a 20000-cycle dwell.
-    S8  PASS       RDI data round trip, byte exact in both directions,
-                   including 4-word bursts and simultaneous transmit; no RTL
-                   change was needed. Full 9/9 run: 6 min 17 s wall clock.
+    S8  NEW        RDI data round trip; see the rung for what it drives.
 
   A rung that goes red now is a REGRESSION. Read its blocker string first: each
   one names the defects that used to live there and what to re-check.

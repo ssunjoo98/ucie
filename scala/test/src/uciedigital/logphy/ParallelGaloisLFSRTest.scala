@@ -1,10 +1,11 @@
 package edu.berkeley.cs.uciedigital.utils
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.funspec.AnyFunSpec
 
-class ParallelGaloisLFSRTest extends AnyFunSpec with ChiselSim {
+class ParallelGaloisLFSRTest extends AnyFunSpec with ChiselSim with UcieSimPrefs {
   val seed = 0x1dbfbc
   val lfsrWidth = 23
   val dataWidth = 32

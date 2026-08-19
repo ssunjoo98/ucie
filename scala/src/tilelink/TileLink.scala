@@ -747,6 +747,11 @@ class UcieTL(params: UcieTLParams, managerRegion: Seq[AddressSet], beatBytes: In
     test.io.sb.rxData := phy.io.sb.rxData
     digiSb.in.bits    := phy.io.sb.rxData.asUInt
     digiSb.in.fwClock := phy.io.sb.rxClk.asUInt
+
+    // TODO: the PHY macro exposes no PLL-lock or clock-ungate status, so tie both true --
+    // without them the LTSM can never leave RESET (LinkTrainingSM.scala:1141).
+    ucieDigital.io.phyFacingIo.status.pllLock := true.B
+    ucieDigital.io.phyFacingIo.status.clocksUngatedAndStable := true.B
      
     withClockAndReset(childClock, childReset) {
       val clientTl = clientNode.out(0)._1

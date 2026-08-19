@@ -25,6 +25,9 @@ class RegsToLink extends Bundle {
   val targetWidth = UInt(4.W)
   val targetSpeed = UInt(4.W)
   val startTraining = Bool()
+  // Held pending bit of start_link_training. The FDI Active request is a level that must survive
+  // the whole ADV_CAP -> REQ/RSP_ACTIVE choreography, which the one-cycle `startTraining` cannot.
+  val startTrainingPending = Bool()
   val retrain = Bool()
   val corrProtoReport = Bool()
   val nonFatalProtoReport = Bool()

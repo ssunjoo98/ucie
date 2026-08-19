@@ -1,12 +1,13 @@
 package edu.berkeley.cs.uciedigital.sideband
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.util._
 import chisel3.simulator.scalatest.ChiselSim
 import edu.berkeley.cs.uciedigital.simutils.VerilatorCoverage
 import org.scalatest.funspec.AnyFunSpec
 
-class SidebandPriorityQueueTest extends AnyFunSpec with ChiselSim with VerilatorCoverage {
+class SidebandPriorityQueueTest extends AnyFunSpec with ChiselSim with UcieSimPrefs with VerilatorCoverage {
   val msgW = 128
 
   val reqResp = SBMsgOpcode.MessageWithoutData.litValue

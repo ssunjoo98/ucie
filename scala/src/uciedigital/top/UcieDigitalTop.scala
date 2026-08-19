@@ -29,6 +29,9 @@ class UcieDigitalTopChipIO(protocolParams: ProtocolTopParams) extends Bundle {
 class UcieDigitalTopPhyIO(afeParams: AfeParams, sbParams: SidebandParams) extends Bundle {
   val mainbandLink = new MainbandLaneIO(afeParams)
   val sidebandLink = new SidebandPhyLinkIO(sbParams.sbLinkWidth)
+  // pllLock / clocksUngatedAndStable. Not software state -- PHY pins, and without them the LTSM
+  // RESET exit gate can never be satisfied at this top (LinkTrainingSM.scala:1141).
+  val status = Input(new PhyStatusFromPhyIO())
 }
 
 class UcieDigitalTopIO(params: UcieDigitalTopParams) extends Bundle {
@@ -97,50 +100,23 @@ class UcieDigitalTop(params: UcieDigitalTopParams = UcieDigitalTopParams.default
     io.phyFacingIo.mainbandLink <> logicalPhy.io.analog.mainband
     io.phyFacingIo.sidebandLink <> logicalPhy.io.analog.sidebandLink
 
-    // TODO: pending connection -- status to regs. Layer ctrl/status + PHY macro ctrl/status + the
-    // register-block bundles are not yet cross-wired, working on bug fixes; tie off inputs, keep outputs (dontTouch) so nothing is pruned.
-    protocolLayer.io.ctrl := DontCare
-    logicalPhy.io.ctrl := DontCare
-    logicalPhy.io.analog.status := DontCare // PHY->logphy status
+    logicalPhy.io.analog.status := io.phyFacingIo.status // PHY->logphy status
     dontTouch(protocolLayer.io.status)
     dontTouch(logicalPhy.io.status)
-    dontTouch(logicalPhy.io.analog.ctrl) // logphy->PHY control
+    dontTouch(logicalPhy.io.analog.ctrl) // logphy->PHY control, still unwired (D-41)
 
-    regs.foreach { r =>
-      r.module.io.linkReset := false.B
-      r.module.io.adapterToRegs := 0.U.asTypeOf(new AdapterToRegs)
-      r.module.io.phyToRegs := 0.U.asTypeOf(new PhyToRegs(validatedParams.regs.numModules))
-      r.module.io.linkToRegs := 0.U.asTypeOf(new LinkToRegs)
-      r.module.io.mailboxSideband.req.ready := true.B
-      r.module.io.mailboxSideband.resp.valid := false.B
-      r.module.io.mailboxSideband.resp.bits := 0.U.asTypeOf(new MailboxSbResp)
-      r.module.io.phyToVendor.foreach(_ := 0.U.asTypeOf(new PhyToVendor))
-      r.module.io.d2dToVendor.foreach(_ := DontCare)
-      dontTouch(r.module.io.regsToAdapter)
-      dontTouch(r.module.io.regsToPhy)
-      dontTouch(r.module.io.regsToLink)
-      dontTouch(r.module.io.mailboxSideband.req)
-      r.module.io.vendorToPhy.foreach(dontTouch(_))
-      r.module.io.linkEventIrq.foreach(dontTouch(_))
-      r.module.io.linkErrorIrq.foreach(dontTouch(_))
-    }
-
-    // External reg block: drive our side so the integrator only needs a single <>.
-    io.regBlockIo.foreach { rb =>
-      rb.linkReset := false.B
-      rb.adapterToRegs := 0.U.asTypeOf(new AdapterToRegs)
-      rb.phyToRegs := 0.U.asTypeOf(new PhyToRegs(validatedParams.regs.numModules))
-      rb.linkToRegs := 0.U.asTypeOf(new LinkToRegs)
-      rb.mailboxSideband.req.ready := true.B
-      rb.mailboxSideband.resp.valid := false.B
-      rb.mailboxSideband.resp.bits := 0.U.asTypeOf(new MailboxSbResp)
-      rb.phyToVendor.foreach(_ := 0.U.asTypeOf(new PhyToVendor))
-      rb.d2dToVendor.foreach(_ := DontCare)
-      dontTouch(rb.regsToAdapter)
-      dontTouch(rb.regsToPhy)
-      dontTouch(rb.regsToLink)
-      dontTouch(rb.mailboxSideband.req)
-      rb.vendorToPhy.foreach(dontTouch(_))
-    }
+    // Exactly ONE register interface drives the datapath: the external port when the map lives
+    // outside this top (production), otherwise the internal block. Both can exist at once
+    // (includeRegNode=false && includeInterruptNode=true), and driving both would let Chisel
+    // last-connect silently pick whichever ran second.
+    val liveRegs: UcieRegBlockIO = io.regBlockIo.orElse(regs.map(_.module.io)).get
+    UcieRegBridge(
+      logicalPhy = logicalPhy,
+      protocolLayer = protocolLayer,
+      liveRegs = liveRegs,
+      internalRegs = regs.map(_.module.io),
+      externalRegs = io.regBlockIo,
+      regParams = validatedParams.regs
+    )
   }
 }

@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.logphy
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import edu.berkeley.cs.uciedigital.utils.ReferenceLFSR
@@ -7,7 +8,7 @@ import org.scalatest.funspec.AnyFunSpec
 
 import scala.util.Random
 
-class UcieLFSRTest extends AnyFunSpec with ChiselSim {
+class UcieLFSRTest extends AnyFunSpec with ChiselSim with UcieSimPrefs {
   val serializerRatio = 32
   val lanes = 16
   val deterministicSteps = 8

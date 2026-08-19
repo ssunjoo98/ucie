@@ -7,7 +7,7 @@ import publish._
 object `package` extends ScalaModule, PublishModule {
   def scalaVersion = "2.13.18"
   def publishVersion = "0.0.1"
-  def chiselVersion = "7.8.0"
+  def chiselVersion = "7.9.0"
   def artifactName = "ucie"
 
   def mvnDeps = Seq(
@@ -39,6 +39,12 @@ object `package` extends ScalaModule, PublishModule {
       mvn"org.scalatest::scalatest:3.2.19",
     )
     def testParallelism = false
+    // Forward toolchain env into forked test JVMs so ChiselSim/svsim can find
+    // verilator and a C++17-capable g++ regardless of Mill's env filtering.
+    def forkEnv = Task {
+      super.forkEnv() ++ Seq("PATH", "VERILATOR_ROOT")
+        .flatMap(k => sys.env.get(k).map(k -> _)).toMap
+    }
   }
 }
 

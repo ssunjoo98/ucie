@@ -55,28 +55,24 @@ import org.scalatest.funspec.AnyFunSpec
     U9   bursts, both ways      -> 4 beats each way simultaneously, in order, byte exact
     U10  clean D2D sideband     -> no sideband fault bit latched carrying adapter traffic
 
-  Why U10 is at the TOP and not folded into U1. When the ladder was written it
-  was predicted red, and a latched status bit does not block anything below it:
-  the RDI still reaches active and data still crosses. Rungs cancel everything
-  ABOVE them, so a predicted-red cosmetic rung placed low would cancel the
-  whole ladder for no reason. Order the rungs by dependency, not by where the
-  signal lives.
+  Why U10 is at the TOP and not folded into U1. It is PREDICTED RED, and a
+  latched status bit does not block anything below it: the RDI still reaches
+  active and data still crosses. Rungs cancel everything ABOVE them, so a
+  predicted-red cosmetic rung placed low would cancel the whole ladder for no
+  reason. Order the rungs by dependency, not by where the signal lives.
 
-  Status MEASURED 2026-08-13: ALL ELEVEN RUNGS PASS (11/11, 10 min 44 s wall
-  clock), with the FDI pl_valid per-beat fix and the protocol requestActive
-  input carried on this branch. Three rungs were predicted red when the ladder
-  was written; what each one settles now:
-    U2   the AdapterSM ADV_CAP receive-flag race (AdapterSM.scala:219-226,
-         :239-254) is exposed to the RDI-active skew that real training
-         produces instead of a poke -- measured at 10 cycles here, and the
-         exchange completes. U2 MEASURES and PRINTS the skew each run so a
-         tolerance regression is visible.
-    U8   used to fail while the adapter's FDI pl_valid was a sticky level (one
-         beat delivered N times); it now pins the per-beat fix in
-         D2DMainbandModule.
-    U10  used to latch a sideband fault bit on the way to sACTIVE; clean since
-         the sideband and training fixes on this branch. The LogPhy ladder's
-         S7 asserts the same thing one level down.
+  Status when written (2026-08-13): NOT MEASURED end to end. Three rungs are
+  predicted red and each blocker string names the defect and the fix:
+    U2   the AdapterSM ADV_CAP receive-flag race (AdapterSM.scala:219-226,:239-254).
+         D2DAdapterBringupTest.scala:193-236 pins it against a stubbed PHY and
+         measures the tolerance at 6 cycles of RDI-active skew. Here the skew is
+         produced by real training instead of a poke, and U2 MEASURES and PRINTS it.
+    U8   the adapter's FDI pl_valid is a sticky level, not a per-beat pulse
+         (D2DMainbandModule.scala:139-144), so one beat is delivered N times.
+    U10  a sideband fault bit latches on the way to sACTIVE in the full stack --
+         observed, bit not yet identified. The LogPhy ladder's S7 asserts the
+         same thing and passes, so the adapter's own RDI cfg traffic is what
+         differs.
 
   Cost: every rung except U0 pays the real 3.2M-cycle RESET minimum wait
   (LinkTrainingSM.scala:108-116) plus the full training climb, from a cold start.
@@ -103,8 +99,7 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
   //     window with plClkReq=1, lpClkAck=0. A 4-phase ack is allowed to take
   //     cycles; the assertion is what is wrong.
   //   - ProtocolMainbandRx.scala:51-58 FATALs on rx overflow and on pl_valid
-  //     outside ACTIVE, both of which the sticky-pl_valid defect used to
-  //     trigger before the per-beat fix (see U8).
+  //     outside ACTIVE, both of which the sticky-pl_valid defect (U8) triggers.
   //   - ProtocolStateController.scala:134-147.
   // Turn the layers back on only when chasing one of those deliberately.
   private val noAssertFirtoolOpts = Array(
@@ -143,7 +138,7 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
   private val phyFloorGuard = 2000000
   /** A handful of adapter sideband exchanges over the 1-bit serial link.
     * ADV_CAP measures 7 cycles from PARAM_EXCH entry to the peer's sb_rcv
-    * pulse; this is four orders of
+    * pulse (D2DAdapterBringupTest.scala:199-206); this is four orders of
     * magnitude of headroom. */
   private val sbExchangeGuard = 400000
   /** Plain registers, one or two cycles. */
@@ -221,7 +216,7 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
 
   /** FDI states that mean "this link is being torn down, not brought up".
     * `retrain` is in the set ON PURPOSE: AdapterSM has no retrain -> active exit
-    * (AdapterSM.scala:512-519),
+    * (AdapterSM.scala:512-519, pinned by D2DAdapterBringupTest.scala:283-336),
     * so entering it is terminal for this ladder. */
   private lazy val fdiTeardown: Set[BigInt] = Set(
     FDIState.linkError.litValue,
@@ -281,7 +276,8 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
   // Stimulus. Copied in SHAPE from LogPhyStagedBringupTest (same asymmetric cold
   // start, same RESET wait, same trigger width) so that a U1 failure is directly
   // comparable with an S0..S7 failure. Copied, not shared: the stimulus is all
-  // harness knowledge, and the two ladders must stay free to diverge.
+  // harness knowledge, which is the same call LogPhyStagedBringupTest made when
+  // it took its own stimulus from LogPhyBringupTest rather than sharing it.
   // ============================================================================
 
   /** Quiet defaults.
@@ -402,7 +398,7 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
           "RDIWakeHandshakeResponder, which walks sIDLE -> sUNGATE -> sACK_ASSERT in ~3 cycles " +
           "and can only leave sUNGATE on clocksUngatedAndStable " +
           "(RDIWakeHandshakeResponder.scala:46-52). That bit has NO hardware source in this " +
-          "design and reaches the RDIController through a pure " +
+          "design (BRINGUP_SEQUENCE D-19) and reaches the RDIController through a pure " +
           "pass-through from the analog status pin (LogicalPhy.scala:286 -> " +
           "PhyControlSignalTranslator.scala:68 -> LogicalPhy.scala:133), so if a future harness " +
           "or top leaves it DontCare -- which is exactly what UcieDigitalTop.scala:104 does -- " +
@@ -415,7 +411,7 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
           "sIDLE is dead code until a PM rung exists. " +
           "WHAT THIS RUNG DOES NOT PROVE: clock gating. The responder's ungateClocks output has " +
           "no field in PhyControlToPhyIO, so it reaches nothing -- LogicalPhy.scala:292 only " +
-          "dontTouches it to stop firtool pruning it. The request side " +
+          "dontTouches it to stop firtool pruning it (BRINGUP_SEQUENCE D-41). The request side " +
           "is a dangling wire while the answer side is a harness constant, so passing here means " +
           "the wake path is WIRED, not that a gate ever opened. It becomes a real check once " +
           "ungateClocks has a port and clocksUngatedAndStable comes from an analog model",
@@ -456,15 +452,14 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
       guard = sbExchangeGuard,
       stride = 8,
       blocker =
-        "PREDICTED RED when this ladder was written, and the underlying race is STILL " +
-          "UNFIXED: the ADV_CAP receive-flag race. AdapterSM latches an incoming ADV_CAP " +
+        "PREDICTED RED -- the ADV_CAP receive-flag race. AdapterSM latches an incoming ADV_CAP " +
           "ONLY while it already sits in PARAM_EXCH (AdapterSM.scala:239-244), and every other " +
           "reset-state cycle force-clears the flag (AdapterSM.scala:220-226); the sender latches " +
           "paramExchSbMsgSntFlag after one accepted send and NEVER retransmits " +
           "(AdapterSM.scala:107-109,:246-250). So if one die enters PARAM_EXCH more than one " +
           "message flight-time after the other, the early die's ADV_CAP is dropped and the late " +
           "die waits in PARAM_EXCH forever -- no timeout, no error bit. " +
-          "A unit-level reproduction with a stubbed PHY pins the same hang and " +
+          "D2DAdapterBringupTest.scala:193-236 pins the same hang with a stubbed PHY and " +
           "measures the boundary: skew <= 6 completes, skew >= 7 hangs, because ADV_CAP takes 7 " +
           "cycles from PARAM_EXCH entry to the peer's sb_rcv pulse. Here the skew is whatever " +
           "REAL training produces between the two dies' RDI-active reports, and this rung " +
@@ -475,9 +470,9 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
           "into the enclosing `when(linkStateReg === RDIState.reset)` so a message that arrives " +
           "one sub-state early is still latched; the `.otherwise` branch at :298-307 already " +
           "clears all of them on every exit from reset, so nothing goes stale. VERIFY THE FIX " +
-          "CHEAPLY FIRST with a unit-level stubbed-PHY reproduction, which needs no 3.2M " +
-          "reset wait -- after the patch the boundary assertion INVERTS (skew=20 must now " +
-          "COMPLETE), so update it in the same commit. If " +
+          "CHEAPLY FIRST: D2DAdapterBringupTest.scala:193-236 is the oracle and needs no 3.2M " +
+          "reset wait -- after the patch its assertion INVERTS (skew=20 must now COMPLETE), so " +
+          "update it in the same commit exactly as its own comment at :210-211 instructs. If " +
           "instead the dies never reach PARAM_EXCH at all (linkInit=INIT_START/RDI_BRINGUP), " +
           "this is NOT the race: INIT_START waits on rdi_pl_inband_pres " +
           "(AdapterSM.scala:229-232) and RDI_BRINGUP on rdi_pl_state_sts == active (:234-237), " +
@@ -509,21 +504,21 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
       guard = sbExchangeGuard,
       stride = 8,
       blocker =
-        "RED on any tree without the requestActive patch carried on this branch -- without it " +
-          "there is NO WAY for software to ask for Active, and this ladder cannot even " +
-          "elaborate. Before the patch, ProtocolStateController drove lp_state_req from " +
-          "requestDisable / requestLinkReset / requestRetrain only, defaulting to nop, and " +
-          "ProtocolLayerCtrlIO (ProtocolTypes.scala) had no requestActive field; " +
-          "ProtocolLayerTest.scala even asserts lp_state_req == nop as the steady state. The " +
-          "adapter needs a nop->active EDGE while in FDI_BRINGUP to set transitionToActiveReg " +
-          "and send REQ_ACTIVE (AdapterSM.scala:281-286,:118-120); the peer's REQ_ACTIVE is " +
-          "the only thing that raises pl_rx_active_req (:114,:263-267), RSP_ACTIVE is only " +
-          "sent in reply (:116-117), and INIT_DONE needs BOTH halves (:288-290). Both dies are " +
-          "symmetric, so neither ever started and both parked in FDI_BRINGUP with " +
-          "pl_inband_pres=1, pl_state_sts=reset, pl_rx_active_req=0, negotiatedProtocolValid=1 " +
-          "-- forever, with no timeout and no error bit. The fix, two files: (1) " +
-          "ProtocolTypes.scala adds `val requestActive = Input(Bool())` to ProtocolLayerCtrlIO; " +
-          "(2) ProtocolStateController.scala appends a LOWEST-priority arm `.elsewhen(" +
+        "PREDICTED RED until the ProtocolLayer patch lands -- as shipped there is NO WAY for " +
+          "software to ask for Active, so this ladder cannot even elaborate. " +
+          "ProtocolStateController.scala:58-65 drives lp_state_req from requestDisable / " +
+          "requestLinkReset / requestRetrain only, defaulting to nop, and ProtocolLayerCtrlIO " +
+          "(ProtocolTypes.scala:21-25) has no requestActive field; ProtocolLayerTest.scala even " +
+          "asserts lp_state_req == nop as the steady state. The adapter needs a nop->active " +
+          "EDGE while in FDI_BRINGUP to set transitionToActiveReg and send REQ_ACTIVE " +
+          "(AdapterSM.scala:281-286,:118-120); the peer's REQ_ACTIVE is the only thing that " +
+          "raises pl_rx_active_req (:114,:263-267), RSP_ACTIVE is only sent in reply " +
+          "(:116-117), and INIT_DONE needs BOTH halves (:288-290). Both dies are symmetric, so " +
+          "neither ever starts and both park in FDI_BRINGUP with pl_inband_pres=1, " +
+          "pl_state_sts=reset, pl_rx_active_req=0, negotiatedProtocolValid=1 -- forever, with " +
+          "no timeout and no error bit. FIX, two files: (1) ProtocolTypes.scala:21-25 add `val " +
+          "requestActive = Input(Bool())` to ProtocolLayerCtrlIO; (2) " +
+          "ProtocolStateController.scala:58-65 append a LOWEST-priority arm `.elsewhen(" +
           "io.ctrl.requestActive && ((plStateSts === FDIState.reset && plInbandPres) || " +
           "plStateSts is linkError/disabled/linkReset)) { requestedState := FDIStateReq.active }`. " +
           "The pl_inband_pres term is what places the edge INSIDE FDI_BRINGUP (the adapter " +
@@ -599,27 +594,28 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
       guard = flagGuard,
       stride = 8,
       blocker =
-        "PREDICTED RED when this ladder was written -- in the BODY, not in this predicate -- " +
-          "and it now pins the per-beat pl_valid fix carried on this branch. Before that fix " +
-          "the adapter's FDI pl_valid was a STICKY LEVEL, not a per-beat pulse: " +
-          "D2DMainbandModule set dataBuffRcvFillReg on a received beat and cleared it ONLY " +
-          "when rx_active_req dropped, and pl_valid IS that register. rx_active_req stays high " +
-          "for the whole of ACTIVE (AdapterSM.scala:422-427), so after the first beat pl_valid " +
-          "never fell. ProtocolMainbandRx enqueues on every cycle pl_valid is high " +
+        "PREDICTED RED in the BODY, not in this predicate. The adapter's FDI pl_valid is a " +
+          "STICKY LEVEL, not a per-beat pulse: D2DMainbandModule.scala:139-144 sets " +
+          "dataBuffRcvFillReg on a received beat and clears it ONLY when rx_active_req drops, " +
+          "and pl_valid IS that register (:132). rx_active_req stays high for the whole of " +
+          "ACTIVE (AdapterSM.scala:422-427), so after the first beat pl_valid never falls. " +
+          "ProtocolMainbandRx enqueues on every cycle pl_valid is high " +
           "(ProtocolMainbandRx.scala:38) and the FDI receive direction has NO backpressure by " +
-          "spec, so ONE beat sent became N identical beats delivered; with the chip RX drained " +
-          "the count just grew, and with it undrained the depth-2 queue fills in two cycles, " +
+          "spec, so ONE beat sent becomes N identical beats delivered; with the chip RX drained " +
+          "the count just grows, and with it undrained the depth-2 queue fills in two cycles, " +
           "rxOverflowReg latches (:44-46) and rxReadyForActive drops permanently (:48), taking " +
-          "U5 down on any later re-arm. It was the exact " +
+          "U5 down on any later re-arm. This is already pinned one level down: " +
+          "D2DAdapterMainbandTest.scala:359-369 documents 'pl_valid stays high after the last " +
+          "beat ... update it once pl_valid is made a per-beat qualifier'. It is the exact " +
           "INVERSE of the RDI side, where the PHY correctly delivers a one-cycle pulse " +
-          "(MainbandLaneController.scala:240) -- the adapter converted a pulse into a level and " +
-          "nothing converted it back. The fix (D2DMainbandModule.scala) drives " +
-          "`dataBuffRcvFillReg := rxBeatAcceptedFromRdi` -- a one-cycle pulse " +
-          "one cycle behind the RDI beat, which is exactly how long dataBuffRcvReg " +
-          "holds the data; dataBuffRcvFillReg has exactly one consumer so nothing else " +
-          "changes, and back-to-back RDI beats produce back-to-back FDI pulses with no " +
-          "loss. If this rung goes red with ZERO " +
-          "beats arriving, look one level down: the RDI round trip is separately gated by " +
+          "(MainbandLaneController.scala:240) -- the adapter converts a pulse into a level and " +
+          "nothing converts it back. FIX (D2DMainbandModule.scala:139-144): replace the whole " +
+          "sticky block with `dataBuffRcvFillReg := rxBeatAcceptedFromRdi` -- a one-cycle pulse " +
+          "one cycle behind the RDI beat, which is exactly how long dataBuffRcvReg (:134-137) " +
+          "holds the data. dataBuffRcvFillReg has exactly one consumer (:132) so nothing else " +
+          "changes, and back-to-back RDI beats then produce back-to-back FDI pulses with no " +
+          "loss. Update D2DAdapterMainbandTest.scala:359-369 in the same commit. If instead ZERO " +
+          "beats arrive, look one level down: the RDI round trip is separately gated by " +
           "LogPhyStagedBringupTest S8",
       reached = (h: H) =>
         bothDies(i => flag(h, i, DieFlag.chipTxReady) && flag(h, i, DieFlag.fdiRxActiveSts)),
@@ -655,13 +651,11 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
       guard = flagGuard,
       stride = 8,
       blocker =
-        "PREDICTED RED when this ladder was written, and deliberately the TOP rung so it " +
-          "cancels nothing below it: a latched status bit does not stop the RDI reaching " +
-          "active or data crossing, so ordering it low would cancel the whole ladder for a " +
-          "cosmetic reason. Back then, with a real adapter attached, at least one of the seven " +
-          "sideband fault bits latched on the way to sACTIVE, on BOTH dies; clean since the " +
-          "sideband and training fixes on this branch. " +
-          "LogPhyStagedBringupTest S7 asserts the SAME thing over the " +
+        "PREDICTED RED, and deliberately the TOP rung so it cancels nothing below it: a latched " +
+          "status bit does not stop the RDI reaching active or data crossing, so ordering it low " +
+          "would cancel the whole ladder for a cosmetic reason. What is known: with a real " +
+          "adapter attached, at least one of the seven sideband fault bits latches on the way to " +
+          "sACTIVE, on BOTH dies. LogPhyStagedBringupTest S7 asserts the SAME thing over the " +
           "same training and PASSES (LogPhyStagedBringupTest.scala:970-972), so training is not " +
           "what latches it -- the difference is the adapter's own messages (ADV_CAP, " +
           "REQ/RSP_ACTIVE) riding the RDI cfg path, which the LogPhy ladder's quiet stub never " +
@@ -984,7 +978,7 @@ class UcieDigitalStagedBringupTest extends AnyFunSpec with ChiselSim {
           s"[U2] the ADV_CAP exchange did not complete within ${res.cycles} cycles. MEASURED " +
             s"skew: RDI-active $rdiSkew cycles, PARAM_EXCH entry $paramSkew cycles (die0 " +
             s"entered at ${paramAt(0)}, die1 at ${paramAt(1)}). " +
-            s"A unit-level stubbed-PHY reproduction measured the tolerance at 6 cycles -- ADV_CAP " +
+            s"D2DAdapterBringupTest.scala:193-236 measured the tolerance at 6 cycles -- ADV_CAP " +
             s"takes 7 cycles from PARAM_EXCH entry to the peer's sb_rcv pulse -- so a PARAM_EXCH " +
             s"skew above that IS the documented race, now reproduced on a real link instead of " +
             s"a poke. ${ladder(2).blocker}. Observed: ${stateSummary(h)}")

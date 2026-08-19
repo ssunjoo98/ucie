@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.logphy
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import chisel3.util._
@@ -46,7 +47,7 @@ class PatternReaderWithLfsrHarness(afeParams: AfeParams) extends Module {
   io.rxLfsrCtrl.resetLfsr := patternReader.io.rxLfsrCtrl.resetLfsr
 }
 
-class PatternReaderTest extends AnyFunSpec with ChiselSim {
+class PatternReaderTest extends AnyFunSpec with ChiselSim with UcieSimPrefs {
 
   // ==========================================================================
   // Test configuration (sweep serializer ratio x lane count)

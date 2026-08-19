@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.logphy
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import chisel3.util._
@@ -42,7 +43,7 @@ class PatternWriterWithLfsrHarness(afeParams: AfeParams) extends Module {
   io.txLfsrCtrl.increment := patternWriter.io.txLfsrCtrl.increment
 }
 
-class PatternWriterTest extends AnyFunSpec with ChiselSim {
+class PatternWriterTest extends AnyFunSpec with ChiselSim with UcieSimPrefs {
 
   // ==========================================================================
   // Test configuration

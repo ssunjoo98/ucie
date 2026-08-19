@@ -1,10 +1,8 @@
 # LTSM Loopback
 
-Two staged bring-up ladders. `LogPhyStagedBringupTest` cross-wires two
-`LogicalPhy` instances (`LogPhyLoopbackHarness`) and exercises real
-link-training bring-up; `UcieDigitalStagedBringupTest` stacks a full
-{ProtocolLayer + D2DAdapter + LogicalPhy} per die (`UcieDigitalLoopbackHarness`)
-and takes the same link to protocol-level data. Tests pay the real
+Two-`LogicalPhy` loopback harness (`LogPhyLoopbackHarness`) exercising real
+link-training bring-up, plus a full-stack variant with D2D adapters on top
+(`FullStackLoopbackHarness`, not yet used by a test). Tests pay the real
 3.2M-cycle RESET minimum wait and observe training only through `LogicalPhy`'s
 ports (`status.currentState`/`ltState`/`trainingTimedout`, `rdi.pl*`,
 `analog.sidebandLink.out.{bits,fwClock}`).
@@ -28,25 +26,12 @@ nine pass as of 2026-08-13** (9/9, 6 min 17 s):
 
 A rung going red is now a **regression**. Each `Stage` carries a `blocker`
 string naming the defects that used to live there and what to re-check; read it
-before debugging.
+before debugging. Seventeen RTL defects were fixed to get here — see
+`docs_personal/FIX_LOG.md` for the per-defect history.
 
 S8 elaborates the RDI data ports only for itself (`exposeDataPath`): left
 connected they cost every other rung several times its wall clock, because the
 transmit pack and receive unpack stop folding away.
-
-## `UcieDigitalStagedBringupTest` — one level up
-
-Eleven rungs (U0–U10) over the full per-die stack, cross-wired at the analog
-boundary. **All eleven pass as of 2026-08-13** (11/11, 10 min 44 s). It does
-not re-derive the training milestones: the LogPhy ladder owns S0..S7, and U1
-collapses them into a single floor rung with a real D2DAdapter on the RDI
-instead of the stub (lp_clk_ack registered, lp_stall_ack through an FSM, real
-cfg credits, lp_wake_req hardwired true). Above the floor: U0 checks the RDI
-wake handshake with no reset wait, U2–U6 walk ADV_CAP → protocol negotiation →
-FDI Active, U7 opens the chip interface, U8/U9 prove protocol beats cross the
-link byte-exact — one each way, then simultaneous 4-beat bursts in order —
-and U10 checks that no sideband fault bit latched while carrying the adapter's
-own traffic.
 
 ## What this loopback does NOT verify
 
@@ -61,6 +46,19 @@ Worth knowing before trusting a green run:
 - **The channel is ideal**: zero skew, zero delay, one clock for both dies.
 - MBTRAIN runs with the trainer completing immediately (no calibration
   hardware in this PHY), so the D2C link operations are not executed.
+
+## Unit-level pins
+
+`logphy/D2CMessageMismatchTest` pins MBTRAIN-chain message-name defects that the
+ladder does not reach: the TX eye-sweep END mismatch
+(`TxD2CEyeWidthSweep.scala:179/336`), the RX eye-sweep START mismatch
+(`RxD2CEyeWidthSweep.scala:139/317`), and the `RxD2CPointTestRequester` start
+deadlock (`req.valid` never driven, `RxD2CPointTest.scala:117-123`). The
+SPEEDIDLE pair in that file is now a pass-direction regression: that mismatch
+was fixed.
+
+`sideband/SidebandRawParityRetryTest` pins the RAW-mode parity defect, which only
+appears on a retry (a cold start passes by coincidence).
 
 ## Simulation notes
 

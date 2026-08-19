@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.sideband
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.util._
 import chisel3.simulator.scalatest.ChiselSim
@@ -8,7 +9,7 @@ import org.scalatest.funspec.AnyFunSpec
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
-class SidebandLinkNodeTest extends AnyFunSpec with ChiselSim with VerilatorCoverage {
+class SidebandLinkNodeTest extends AnyFunSpec with ChiselSim with UcieSimPrefs with VerilatorCoverage {
   val msgW = 128
   val linkW = 1
 

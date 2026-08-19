@@ -106,6 +106,9 @@ class UcieLinkDvsecRegs(
   linkOut.targetWidth := targetWidth.reg
   linkOut.targetSpeed := targetSpeed.reg
   linkOut.startTraining := startTrain.fire
+  // Same idiom as PhyVendorRegBlock.scala:44: export the held pending bit for consumers that
+  // need a level rather than the one-cycle fire.
+  linkOut.startTrainingPending := startTrain.pending
   linkOut.retrain := retrain.fire
 
   private val statusChanged = f.RW1C(1, linkIn.statusChanged.asUInt, "link_status_changed", "Link Status changed")

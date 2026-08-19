@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.sideband
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.util._
 import chisel3.simulator.scalatest.ChiselSim
@@ -32,7 +33,7 @@ class TwoNodeLink(sbMsgWidth: Int, ncWidth: Int, numCredits: Int, depths: Sideba
   io.bRxOut <> b.io.rxOut
 }
 
-class SidebandInterfaceNodeTest extends AnyFunSpec with ChiselSim with VerilatorCoverage {
+class SidebandInterfaceNodeTest extends AnyFunSpec with ChiselSim with UcieSimPrefs with VerilatorCoverage {
   val msgW = 128
   val ncW = 32
   val n = msgW / ncW

@@ -151,13 +151,25 @@ xrun \\
     */
   def getSourceFiles(
       sourceDir: Path,
-      fileExtensions: Seq[String] = Seq(".v", ".sv", ".cc", ".vams")
+      fileExtensions: Seq[String] = Seq(".v", ".sv", ".cc", ".vams"),
+      excludeDirs: Seq[String] = Seq.empty
   ): Seq[Path] = {
     os
       .walk(sourceDir)
       .filter(os.isFile)
       .filter(path => fileExtensions.exists(ext => path.last.endsWith(ext)))
+      .filter(path =>
+        !path.relativeTo(sourceDir).segments.exists(excludeDirs.contains)
+      )
   }
+
+  /** Subdirectories of `verilog/` that hold standalone testbenches and
+    * previously-emitted RTL. They must never join a design compile: the
+    * testbenches declare multiple analog blocks per module (*E,TOOMNAB) and the
+    * emitted RTL both redefines freshly generated modules and `include`s files
+    * that are not on the include path (*E,COFILX).
+    */
+  val verilogTestbenchDirs = Seq("clocking_testbenches", "coverage_testbenches")
 
   def simulate[T <: RawModule](
       dut: => T,
@@ -194,7 +206,10 @@ xrun \\
           constants,
           controlFile,
           Utils.constants,
-        ) ++ getSourceFiles(verilogSrcDir) ++
+        ) ++ getSourceFiles(
+          verilogSrcDir,
+          excludeDirs = verilogTestbenchDirs
+        ) ++
           defaultModels.map(module => defaultVsrcDir / module)
       } else { Seq.empty }
     }

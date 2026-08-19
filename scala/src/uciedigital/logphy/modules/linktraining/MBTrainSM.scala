@@ -666,7 +666,7 @@ class MBTrainRequester(afeParams: AfeParams, sbParams: SidebandParams) extends M
             io.freqSel.valid := true.B
           }.elsewhen(((prevState === 2.U) || fromLinkspeed) && (currFreqSel =/= SpeedMode.speed4)) { 
             // from PHYRETRAIN or MBTrain.Linkspeed
-            io.freqSel.bits := (currFreqSel.asUInt - 1.U).asTypeOf(SpeedMode())
+            io.freqSel.bits := SpeedMode.safe(currFreqSel.asUInt - 1.U)._1
             io.freqSel.valid := true.B
           }.otherwise {
             errorDetectedWire := true.B

@@ -1,5 +1,6 @@
 package edu.berkeley.cs.uciedigital.protocol
 
+import edu.berkeley.cs.uciedigital.UcieSimPrefs
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import edu.berkeley.cs.uciedigital.interfaces._
@@ -9,7 +10,7 @@ import org.scalatest.funspec.AnyFunSpec
 import scala.collection.mutable
 import scala.util.Random
 
-class ProtocolLayerTest extends AnyFunSpec with ChiselSim {
+class ProtocolLayerTest extends AnyFunSpec with ChiselSim with UcieSimPrefs {
   private val seed = 0x5eedL
 
   private def initDut(dut: ProtocolLayer): Unit = {
