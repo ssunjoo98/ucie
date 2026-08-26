@@ -138,7 +138,9 @@ class SidebandLinkNode(
   val calculatedDP = WireDefault(payloadForDP.xorR)
   val dpError = WireDefault(doDpCalculation && (expectedDP ^ calculatedDP))
 
-  val parityError = cpError || dpError
+  // A RAW word is a training pattern rather than a message, so its CP and DP
+  // fields are pattern bits and the check does not apply.
+  val parityError = (cpError || dpError) && io.ctrl.rxMode =/= SBRxTxMode.RAW
   val rxOpcode = io.rxOut.bits(4, 0)
   val rxIsWoData =
     SBMsgOpcode.OpsWithoutData.map(_.asUInt === rxOpcode).reduce(_ || _)
