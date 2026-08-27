@@ -302,6 +302,8 @@ class UcieRegBridge(
   lp.bits.txAdjRuntime := regsToPhy.phyControl.tarrEnable
   lp.bits.moduleId := 0.U
 
+  // Held. The protocol layer gates it into the adapter's bring-up window itself.
+  io.protoCtrl.requestActive := true.B
   io.protoCtrl.requestRetrain := regsToLink.retrainPending
   io.protoCtrl.requestLinkReset := false.B
   io.protoCtrl.requestDisable := false.B
