@@ -107,8 +107,7 @@ class LogPhySidebandChannel(
   layerInBuffer.io.in <> io.layer.in
   switch.io.currLayer.from <> layerInBuffer.io.out
 
-  // A RAW word has no header, so the switch would read pattern bits as its
-  // destination. In RAW mode the word is always ours, so it bypasses the switch.
+  // A RAW word has no header for the switch to route on, so it bypasses it.
   switch.io.lowerLayer.from.valid := linkNode.io.rxOut.valid && !rxIsRaw
   switch.io.lowerLayer.from.bits := linkNode.io.rxOut.bits
 

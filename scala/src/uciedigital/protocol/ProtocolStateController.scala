@@ -55,8 +55,7 @@ class ProtocolStateController() extends Module {
     negotiatedValidReg := true.B
   }
 
-  // The adapter edge-detects nop->active only while it is in FDI_BRINGUP, and
-  // pl_inband_pres marks exactly that window.
+  // The adapter only edge-detects nop->active in FDI_BRINGUP, which this marks.
   val fdiInBringupWindow =
     (io.fdi.plStateSts === FDIState.reset) && io.fdi.plInbandPres
   // Leaving linkError, disabled or linkReset needs the active level, not an edge.
