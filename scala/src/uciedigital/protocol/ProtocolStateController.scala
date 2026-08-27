@@ -55,6 +55,16 @@ class ProtocolStateController() extends Module {
     negotiatedValidReg := true.B
   }
 
+  // The adapter edge-detects nop->active only while it is in FDI_BRINGUP, and
+  // pl_inband_pres marks exactly that window.
+  val fdiInBringupWindow =
+    (io.fdi.plStateSts === FDIState.reset) && io.fdi.plInbandPres
+  // Leaving linkError, disabled or linkReset needs the active level, not an edge.
+  val fdiNeedsActiveToRecover =
+    (io.fdi.plStateSts === FDIState.linkError) ||
+      (io.fdi.plStateSts === FDIState.disabled) ||
+      (io.fdi.plStateSts === FDIState.linkReset)
+
   val requestedState = WireDefault(FDIStateReq.nop)
   when(io.ctrl.requestDisable) {
     requestedState := FDIStateReq.disabled
@@ -62,6 +72,11 @@ class ProtocolStateController() extends Module {
     requestedState := FDIStateReq.linkReset
   }.elsewhen(io.ctrl.requestRetrain) {
     requestedState := FDIStateReq.retrain
+  }.elsewhen(
+    io.ctrl.requestActive && (fdiInBringupWindow || fdiNeedsActiveToRecover)
+  ) {
+    // Lowest priority so a held request never masks a teardown.
+    requestedState := FDIStateReq.active
   }
 
   when(!io.fdi.plStallReq) {
