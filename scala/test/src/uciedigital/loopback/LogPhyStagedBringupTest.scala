@@ -221,8 +221,10 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         coldStart(h)
         climbTo(h, LTState.sSBINIT, sbinitEntryCycles)
         for (die <- 0 until 2) {
+          h.io.ltsmState(die).expect(LTSMState.sSBINIT)
           h.io.plPhyInRecenter(die).expect(true.B)
           h.io.plStateSts(die).expect(RDIState.reset)
+          h.io.trainingTimedout(die).expect(false.B)
         }
       }
     }
@@ -235,6 +237,7 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         for (die <- 0 until 2) {
           h.io.sbFaultSeen(die).expect(false.B, "sideband fault during SBINIT")
           h.io.trainingTimedout(die).expect(false.B)
+          h.io.plTrainError(die).expect(false.B)
         }
       }
     }
@@ -248,7 +251,10 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         stepUntil(h, sidebandCycles, "PARAM exchange")(
           bothDies(h.io.negotiatedParamsValid(_).peekBoolean())
         )
-        for (die <- 0 until 2) h.io.plTrainError(die).expect(false.B)
+        for (die <- 0 until 2) {
+          h.io.plTrainError(die).expect(false.B)
+          h.io.plSpeedmode(die).expect(SpeedMode.speed4)
+        }
       }
     }
 
@@ -261,6 +267,7 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         for (die <- 0 until 2) {
           h.io.trainingTimedout(die).expect(false.B)
           h.io.plTrainError(die).expect(false.B)
+          h.io.sbFaultSeen(die).expect(false.B, "sideband fault during MBINIT")
         }
       }
     }
@@ -277,6 +284,7 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         for (die <- 0 until 2) {
           h.io.plSpeedmode(die).expect(SpeedMode.speed4)
           h.io.trainingTimedout(die).expect(false.B)
+          h.io.plTrainError(die).expect(false.B)
         }
       }
     }
@@ -289,6 +297,7 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         stepUntil(h, rdiFlagCycles, "inband presence")(
           bothDies(h.io.plInbandPres(_).peekBoolean())
         )
+        for (die <- 0 until 2) h.io.plTrainError(die).expect(false.B)
       }
     }
 
@@ -317,6 +326,8 @@ class LogPhyStagedBringupTest extends AnyFunSpec with ChiselSim {
         for (die <- 0 until 2) {
           h.io.ltsmState(die).expect(LTSMState.sACTIVE)
           h.io.plStateSts(die).expect(RDIState.active)
+          h.io.plInbandPres(die).expect(true.B)
+          h.io.plSpeedmode(die).expect(SpeedMode.speed4)
           h.io.plPhyInRecenter(die).expect(false.B, "recentering must be done")
           h.io
             .sbFaultSeen(die)
