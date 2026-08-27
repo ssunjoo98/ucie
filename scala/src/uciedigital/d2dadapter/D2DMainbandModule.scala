@@ -138,7 +138,5 @@ class D2DMainbandModule(
     dataBuffRcvReg := io.rdi.plData
   }
 
-  // pl_valid qualifies the one cycle a beat is presented. Held high, the FDI
-  // receive path has no backpressure and re-enqueues the same beat.
   dataBuffRcvFillReg := rxBeatAcceptedFromRdi
 }

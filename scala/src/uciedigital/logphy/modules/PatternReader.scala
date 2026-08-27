@@ -278,8 +278,7 @@ class PatternReader(afeParams: AfeParams) extends Module {
   // Count only while detecting.
   // Result is stable until the requester accepts it via resp.fire.
   // Counting per received word makes the first word phase 0, so the detector
-  // aligns itself. Free-running on the clock drifts by the gap between the two
-  // dies finishing their INIT exchanges.
+  // aligns itself.
   val counterEn = state === sDetect && io.mbRxValid
 
   io.interfaceIo.req.ready := state === sIdle

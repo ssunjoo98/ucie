@@ -30,9 +30,6 @@ class SidebandMessageExchanger(sbParams: SidebandParams) extends Module {
   val msgSent = RegInit(false.B)
   val msgReceived = RegInit(false.B)
 
-  // removed: contradicts the sticky req.valid contract; clear-wins reordering makes this combination well-defined
-  // assert(!(io.clear && io.req.valid), "[SidebandMessageExchanger] Can't assert clear and req.valid together.")
-
   io.resp.bits := io.sbLaneIo.rx.bits.data
   io.resp.valid := false.B
 
