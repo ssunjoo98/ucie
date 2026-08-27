@@ -44,6 +44,9 @@ class PatternReader(afeParams: AfeParams) extends Module {
     }
     val mbRxLaneIo =
       Input(new MainbandLanes(afeParams.mbLanes, afeParams.mbSerializerRatio))
+    // High on cycles that carry a received word. Tie high for a source with no
+    // valid qualifier.
+    val mbRxValid = Input(Bool())
   })
 
   // ==========================================================================
@@ -274,7 +277,10 @@ class PatternReader(afeParams: AfeParams) extends Module {
 
   // Count only while detecting.
   // Result is stable until the requester accepts it via resp.fire.
-  val counterEn = state === sDetect
+  // Counting per received word makes the first word phase 0, so the detector
+  // aligns itself. Free-running on the clock drifts by the gap between the two
+  // dies finishing their INIT exchanges.
+  val counterEn = state === sDetect && io.mbRxValid
 
   io.interfaceIo.req.ready := state === sIdle
   io.interfaceIo.resp.valid := state === sResult
