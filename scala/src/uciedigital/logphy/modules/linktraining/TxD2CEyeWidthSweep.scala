@@ -77,12 +77,12 @@ class TxD2CEyeWidthSweepRequester(
   )
   switch(comparisonModeReg) {
     is(ComparisonMode.AGGREGATE) { // Aggregate comparison
-      txInitEyeWidthSweepResults(0) := sbMsgExchanger.io.resp.bits(18)
+      txInitEyeWidthSweepResults(0) := sbMsgExchanger.io.resp.bits(44)
     }
     is(ComparisonMode.PERLANE) { // Per-lane comparison
       switch(patternTypeReg) {
         is(PatternSelect.VALTRAIN) {
-          txInitEyeWidthSweepResults(0) := sbMsgExchanger.io.resp.bits(19)
+          txInitEyeWidthSweepResults(0) := sbMsgExchanger.io.resp.bits(45)
         }
         is(PatternSelect.LFSR) {
           for (i <- 0 until afeParams.mbLanes) {
@@ -303,7 +303,7 @@ class TxD2CEyeWidthSweepResponder(
   io.patternReaderIo.remoteFuncLanes := "b011".U
 
   val dataField = Wire(UInt(64.W))
-  val msgInfoField = Wire(UInt(15.W))
+  val msgInfoField = Wire(UInt(16.W))
   // Note: Can register the response if combinational path is long, then next cycle
   // drive the sbMsgExchanger.io.req.valid HIGH
   dataField := Cat(
@@ -328,7 +328,7 @@ class TxD2CEyeWidthSweepResponder(
         sbMsgExchanger.io.rxRefBitPattern.bits := SBM.START_TX_INIT_D2C_EYE_SWEEP_REQ
 
         when(sbMsgExchanger.io.resp.valid) {
-          maxErrorThresholdReg := sbMsgExchanger.io.resp.bits(21, 14)
+          maxErrorThresholdReg := sbMsgExchanger.io.resp.bits(55, 40)
           comparisonModeReg := sbMsgExchanger.io.resp
             .bits(123)
             .asTypeOf(ComparisonMode())

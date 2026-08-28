@@ -121,7 +121,7 @@ class RxD2CEyeWidthSweepRequester(
   io.patternReaderIo.remoteFuncLanes := "b011".U
 
   val dataField = Wire(UInt(64.W))
-  val msgInfoField = Wire(UInt(15.W))
+  val msgInfoField = Wire(UInt(16.W))
   // Note: Can register the response if combinational path is long, then next cycle
   // drive the sbMsgExchanger.io.req.valid HIGH
   dataField := Cat(
@@ -347,12 +347,12 @@ class RxD2CEyeWidthSweepResponder(
   )
   switch(comparisonModeReg) {
     is(ComparisonMode.AGGREGATE) { // Aggregate comparison
-      rxInitEyeWidthSweepRemoteResults(0) := sbMsgExchanger.io.resp.bits(18)
+      rxInitEyeWidthSweepRemoteResults(0) := sbMsgExchanger.io.resp.bits(44)
     }
     is(ComparisonMode.PERLANE) { // Per-lane comparison
       switch(patternTypeReg) {
         is(PatternSelect.VALTRAIN) {
-          rxInitEyeWidthSweepRemoteResults(0) := sbMsgExchanger.io.resp.bits(19)
+          rxInitEyeWidthSweepRemoteResults(0) := sbMsgExchanger.io.resp.bits(45)
         }
         is(PatternSelect.LFSR) {
           for (i <- 0 until afeParams.mbLanes) {
