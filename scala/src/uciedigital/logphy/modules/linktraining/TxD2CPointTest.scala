@@ -66,12 +66,12 @@ class TxD2CPointTestRequester(afeParams: AfeParams, sbParams: SidebandParams)
   )
   switch(comparisonModeReg) {
     is(1.U) { // Aggregate comparison
-      txInitPtTestResults(0) := sbMsgExchanger.io.resp.bits(18)
+      txInitPtTestResults(0) := sbMsgExchanger.io.resp.bits(44)
     }
     is(0.U) { // Per-lane comparison
       switch(patternTypeReg) {
         is(PatternSelect.VALTRAIN) {
-          txInitPtTestResults(0) := sbMsgExchanger.io.resp.bits(19)
+          txInitPtTestResults(0) := sbMsgExchanger.io.resp.bits(45)
         }
         is(PatternSelect.LFSR) {
           for (i <- 0 until afeParams.mbLanes) {
@@ -286,7 +286,7 @@ class TxD2CPointTestResponder(afeParams: AfeParams, sbParams: SidebandParams)
         sbMsgExchanger.io.rxRefBitPattern.bits := SBM.START_TX_INIT_D2C_POINT_TEST_REQ
 
         when(sbMsgExchanger.io.resp.valid) {
-          maxErrorThresholdReg := sbMsgExchanger.io.resp.bits(21, 14)
+          maxErrorThresholdReg := sbMsgExchanger.io.resp.bits(55, 40)
           comparisonModeReg := sbMsgExchanger.io.resp
             .bits(123)
             .asTypeOf(ComparisonMode())
